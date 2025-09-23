@@ -1,0 +1,18 @@
+# config/sim_config.yaml
+
+friction:
+  plane: 1.0
+  target: 0.8
+  robot: 0.5
+
+mass:
+  target: 5.0
+  robot: 2.0
+
+robot:
+  shape: cylinder
+  radius: 0.2
+  height: 0.1
+
+target:
+  size: [0.6, 0.6, 0.3]
