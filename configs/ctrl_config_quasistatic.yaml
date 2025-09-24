@@ -1,0 +1,12 @@
+# config/ctrl_config.yaml
+
+gain:
+  kp_t: 3.0
+  kd_t: 2.0
+  kp_r: 3.0
+  kd_r: 2.0
+
+system:
+  L: 0.3
+  m: 10.0
+  J: 2.4

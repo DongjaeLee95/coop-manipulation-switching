@@ -1,0 +1,11 @@
+# config/sim_config.yaml
+
+friction:
+  plane: 0.1
+  robot: 0.1  # lateral friction
+
+robot:
+  size: [0.6, 0.6, 0.3]
+  mass: 10.0
+
+  
