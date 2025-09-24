@@ -3,15 +3,17 @@
 friction:
   plane: 1.0
   target: 0.8
-  robot: 0.5
+  robot_t: 0.0  # lateral friction
+  robot_r: 10.0 # rolling friction
 
 mass:
-  target: 5.0
-  robot: 2.0
+  target: 10.0
+  # target_moi: 2.4
+  robot: 0.5
 
 robot:
   shape: cylinder
-  radius: 0.2
+  radius: 0.1
   height: 0.1
 
 target:

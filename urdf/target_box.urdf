@@ -1,0 +1,29 @@
+<?xml version="1.0" ?>
+<robot name="target_box">
+  <link name="box_link">
+    <inertial>
+      <!-- Center of mass offset -->
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="5"/>
+      <!-- Replace these inertia values with your calculated ones -->
+      <inertia ixx="0.8" iyy="0.8" izz="0.5" ixy="0" ixz="0" iyz="0"/>
+    </inertial>
+
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="1.2 1.2 0.6"/> <!-- full size: 2 * halfExtents -->
+      </geometry>
+      <material name="red">
+        <color rgba="1 0 0 1"/>
+      </material>
+    </visual>
+
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="1.2 1.2 0.6"/>
+      </geometry>
+    </collision>
+  </link>
+</robot>
