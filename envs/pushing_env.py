@@ -17,6 +17,14 @@ class PushingEnv:
         with open(ctrl_config_path, "r") as f:
             self.ctrl_config = yaml.safe_load(f)
 
+        self.friction = {
+            "plane": self.sim_config["friction"]["plane"],
+            "target": self.sim_config["friction"]["target"],
+            "robot_t": self.sim_config["friction"]["robot_t"],
+            "robot_r": self.sim_config["friction"]["robot_r"]
+        }
+        self.gravity = [0, 0, -9.8]
+
         # Connect to PyBullet
         if gui:
             p.connect(p.GUI)
@@ -24,14 +32,13 @@ class PushingEnv:
             p.connect(p.DIRECT)
 
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setGravity(0, 0, -9.8)
+        p.setGravity(*self.gravity)
 
         # Load plane
         self.plane = p.loadURDF("plane.urdf")
         p.changeDynamics(self.plane, -1, lateralFriction=self.sim_config["friction"]["plane"])
 
         # Load target box
-        # self.target_box = p.loadURDF("urdf/target_box.urdf", basePosition=[1.5, 0, 0.3])
         target_size = self.sim_config["target"]["size"]
         target_collision = p.createCollisionShape(p.GEOM_BOX, halfExtents=target_size)
         target_visual = p.createVisualShape(p.GEOM_BOX, halfExtents=target_size, rgbaColor=[1, 0, 0, 1])
@@ -211,6 +218,12 @@ class PushingEnv:
         p.addUserDebugLine(pos, x_end, [1, 0, 0], lineWidth=2, lifeTime=5/240)  # Red = X
         p.addUserDebugLine(pos, y_end, [0, 1, 0], lineWidth=2, lifeTime=5/240)  # Green = Y
         p.addUserDebugLine(pos, z_end, [0, 0, 1], lineWidth=2, lifeTime=5/240)  # Blue = Z
+
+    def get_mass(self, body_id):
+        return p.getDynamicsInfo(body_id, -1)[0]
+
+    def get_inertia(self, body_id):
+        return p.getDynamicsInfo(body_id, -1)[2]
 
 
     def close(self):

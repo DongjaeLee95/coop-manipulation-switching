@@ -1,0 +1,102 @@
+import pickle
+import numpy as np
+import matplotlib.pyplot as plt
+
+class LogVisualizer:
+    def __init__(self, log_path="logs/simulation_log.pkl"):
+        with open(log_path, "rb") as f:
+            self.data = pickle.load(f)
+
+        self.time = []
+        self.pos_x = []
+        self.pos_y = []
+        self.yaw = []
+        self.force_x = []
+        self.force_y = []
+        self.torque = []
+        self.vel_x = []
+        self.vel_y = []
+        self.ang_vel = []
+
+        self.target_pos_x = []
+        self.target_pos_y = []
+        self.target_yaw = []
+        self.target_vel_x = []
+        self.target_vel_y = []
+        self.target_ang_vel = []
+
+        self._extract_data()
+
+    def _quat_to_yaw(self, quat):
+        x, y, z, w = quat
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        return np.arctan2(siny_cosp, cosy_cosp)
+
+    def _extract_data(self):
+        for step in self.data["steps"]:
+            self.time.append(step["time"])
+            robot = step["robots"][0]
+            action = step["actions"][0]
+            target = step["target"]
+
+            # Robot 1 data
+            self.pos_x.append(robot["position"][0])
+            self.pos_y.append(robot["position"][1])
+            self.yaw.append(self._quat_to_yaw(robot["orientation_quat"]))
+            self.force_x.append(action["force_x"])
+            self.force_y.append(action["force_y"])
+            self.torque.append(action["torque"])
+            self.vel_x.append(robot["linear_velocity"][0])
+            self.vel_y.append(robot["linear_velocity"][1])
+            self.ang_vel.append(robot["angular_velocity"][2])
+
+            # Target box data
+            self.target_pos_x.append(target["position"][0])
+            self.target_pos_y.append(target["position"][1])
+            self.target_yaw.append(self._quat_to_yaw(target["orientation_quat"]))
+            self.target_vel_x.append(target["linear_velocity"][0])
+            self.target_vel_y.append(target["linear_velocity"][1])
+            self.target_ang_vel.append(target["angular_velocity"][2])
+
+    def plot_robot1(self):
+        fig, axs = plt.subplots(3, 3, figsize=(15, 10))
+        axs = axs.flatten()
+
+        axs[0].plot(self.time, self.pos_x); axs[0].set_title("Position X [m]")
+        axs[1].plot(self.time, self.pos_y); axs[1].set_title("Position Y [m]")
+        axs[2].plot(self.time, np.degrees(self.yaw)); axs[2].set_title("Yaw Angle [deg]")
+
+        axs[3].plot(self.time, self.force_x); axs[3].set_title("Force X [N]")
+        axs[4].plot(self.time, self.force_y); axs[4].set_title("Force Y [N]")
+        axs[5].plot(self.time, self.torque);  axs[5].set_title("Torque [Nm]")
+
+        axs[6].plot(self.time, self.vel_x); axs[6].set_title("Velocity X [m/s]")
+        axs[7].plot(self.time, self.vel_y); axs[7].set_title("Velocity Y [m/s]")
+        axs[8].plot(self.time, self.ang_vel); axs[8].set_title("Angular Velocity [rad/s]")
+
+        for ax in axs:
+            ax.set_xlabel("Time [s]")
+            ax.grid(True)
+
+        plt.tight_layout()
+        plt.show()
+
+    def plot_target_box(self):
+        fig, axs = plt.subplots(2, 3, figsize=(15, 6))
+        axs = axs.flatten()
+
+        axs[0].plot(self.time, self.target_pos_x); axs[0].set_title("Target Position X [m]")
+        axs[1].plot(self.time, self.target_pos_y); axs[1].set_title("Target Position Y [m]")
+        axs[2].plot(self.time, np.degrees(self.target_yaw)); axs[2].set_title("Target Yaw Angle [deg]")
+
+        axs[3].plot(self.time, self.target_vel_x); axs[3].set_title("Target Velocity X [m/s]")
+        axs[4].plot(self.time, self.target_vel_y); axs[4].set_title("Target Velocity Y [m/s]")
+        axs[5].plot(self.time, self.target_ang_vel); axs[5].set_title("Target Angular Velocity [rad/s]")
+
+        for ax in axs:
+            ax.set_xlabel("Time [s]")
+            ax.grid(True)
+
+        plt.tight_layout()
+        plt.show()
