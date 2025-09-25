@@ -4,12 +4,11 @@ class CtrllerQPOnly:
     def __init__(self, param):
         self.param = param
 
-    def compute(self, q, v, x_d, tau, delta, iter_idx):
+    def compute(self, q, x_d, tau, delta, iter_idx):
         """
         Args:
             q : (3,) np.array, current state
-            v : (3,) np.array, current velocity
-            x_d : (2*qdim,) np.array, desired [q_d; qdot_d]
+            x_d : (qdim,) np.array, desired [q_d]
             tau : (3,) np.array, torque input
             delta : (udim,) np.array, actuator selection vector
             iter_idx : int, iteration index
@@ -23,7 +22,6 @@ class CtrllerQPOnly:
 
         qdim = self.param["qdim"]
         q_d = x_d[0:qdim]
-        qdot_d = x_d[qdim:2*qdim]
 
         R = np.array([
             [np.cos(psi), -np.sin(psi)],
@@ -34,24 +32,21 @@ class CtrllerQPOnly:
             [np.zeros((1, 2)), 1]
         ])
         M = np.block([
-            [self.param["m"] * np.eye(2), np.zeros((2, 1))],
-            [np.zeros((1, 2)), self.param["J"]]
+            [self.param["c_f"] * np.eye(2), np.zeros((2, 1))],
+            [np.zeros((1, 2)), self.param["c_tau"]]
         ])
+        G = F @ np.linalg.inv(M)
 
         eq = q_d - q.reshape(-1,1)
-        v_d = qdot_d + self.param["Kq"] @ eq
-        ev = v_d - v.reshape(-1,1)
 
         delta_dim = len(delta)
-        Gbar = self.findGbar(delta)
         Bbar = self.findBbar(delta)
-        c = 2 * min(np.min(np.diag(self.param["Kq"])),
-                    np.min(np.diag(self.param["Kv"]))) - 1
-        V = float(0.5 * (eq.T @ eq + ev.T @ ev))
+        c = 2*np.min(np.diag(self.param["Kq"]))
+        V = float(0.5 * eq.T @ eq)
 
         # --- Analytic controller ---
-        trigger_x = Bbar.T @ F.T @ np.linalg.inv(M) @ ev
-        trigger_y = -(c - self.param["V_decay"]) * V + ev.T @ np.linalg.inv(M) @ F @ tau
+        trigger_x = Bbar.T @ G.T @ eq
+        trigger_y = -(c - self.param["V_decay"]) * V + eq.T @ G @ tau.reshape(-1,1)
 
         ubar = np.zeros(int(np.sum(delta)))
         if trigger_y > 0:
@@ -59,7 +54,7 @@ class CtrllerQPOnly:
             if denominator > 0:
                 for i in range(len(ubar)):
                     ubar[i] = self.ReLU(trigger_x[i]) * trigger_y / denominator
-                    # ubar[i] = min(ubar[i], self.param["uM"])
+                    # ubar[i] = min(ubar[i], self.param["uM"])    
 
         # select indices from delta
         u = np.zeros(delta_dim)
@@ -96,10 +91,6 @@ class CtrllerQPOnly:
 
         j_idx = [j for j in range(p["udim"]) if delta[j] > 0]
         return B[:, j_idx]
-
-    def findGbar(self, delta):
-        M = np.diag([self.param["m"], self.param["m"], self.param["J"]])
-        return np.linalg.inv(M) @ self.findBbar(delta)
 
     @staticmethod
     def ReLU(x):

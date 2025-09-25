@@ -25,7 +25,7 @@ class ICSMILP:
         # Sum(delta) = sum(delta_prev) → added dynamically in compute()
         self.delta_sum_constraint = None
 
-    def compute(self, q, v, x_d, tau, delta_prev, u_prev, iter_idx):
+    def compute(self, q, x_d, tau, delta_prev, u_prev, iter_idx):
         """
         Python version of ICS_MILP.m
 
@@ -40,29 +40,25 @@ class ICSMILP:
 
         qdim = self.param["qdim"]
         q_d = x_d[0:qdim]
-        qdot_d = x_d[qdim:2*qdim]
+        qdot_d = x_d[qdim:]
 
         R = np.array([[np.cos(psi), -np.sin(psi)],
                       [np.sin(psi),  np.cos(psi)]])
         F = np.block([[R, np.zeros((2, 1))],
                       [np.zeros((1, 2)), 1]])
-        M = np.block([[self.param["m"] * np.eye(2), np.zeros((2, 1))],
-                      [np.zeros((1, 2)), self.param["J"]]])
+        M = np.block([[self.param["c_f"] * np.eye(2), np.zeros((2, 1))],
+                      [np.zeros((1, 2)), self.param["c_tau"]]])
+        G = F @ np.linalg.inv(M)
 
         eq = q_d - q.reshape(-1,1)
-        v_d = qdot_d + self.param["Kq"] @ eq
-        ev = v_d - v.reshape(-1,1)
 
         Bbar = self.findBbar(delta_prev)
-        Gbar = self.findGbar(delta_prev)
-        ubar = self.findubar(u_prev, delta_prev)
 
-        c = 2 * min(np.min(np.diag(self.param["Kq"])),
-                    np.min(np.diag(self.param["Kv"]))) - 1
-        V = float(0.5 * (eq.T @ eq + ev.T @ ev))
+        c = 2 * np.min(np.diag(self.param["Kq"]))
+        V = float(0.5 * eq.T @ eq)
 
-        trigger_x = Bbar.T @ np.linalg.inv(M) @ ev
-        trigger_y = -(c - self.param["V_decay"]) * V + ev.T @ np.linalg.inv(M) @ F @ tau
+        trigger_x = Bbar.T @ G.T @ eq
+        trigger_y = -(c - self.param["V_decay"]) * V + eq.T @ G @ tau.reshape(-1,1)
         trigger_cond = (trigger_y > 0) and (np.max(trigger_x) <= 0)
 
         # additonal condition
@@ -87,10 +83,9 @@ class ICSMILP:
                 self.mdl.remove(self.delta_sum_constraint)
 
             B_full = self.findB(np.ones(self.param["udim"]))
-            lhs = ev.T @ np.linalg.inv(M) @ F @ tau - ev.T @ np.linalg.inv(M) @ B_full @ np.array(self.z)
-            c = 2 * min(np.min(np.diag(self.param["Kq"])),
-                        np.min(np.diag(self.param["Kv"]))) - 1
-            V = float(0.5 * (eq.T @ eq + ev.T @ ev))
+            lhs = eq.T @ np.linalg.inv(M) @ F @ tau.reshape(-1,1) - eq.T @ np.linalg.inv(M) @ B_full @ np.array(self.z)
+            c = 2 * np.min(np.diag(self.param["Kq"]))
+            V = float(0.5 * eq.T @ eq)
 
             self.dynamic_constraint = self.mdl.add_constraint((c - self.param["V_decay"]) * V >= lhs.item() + self.rho)
             self.delta_sum_constraint = self.mdl.add_constraint(self.mdl.sum(self.delta) == int(np.sum(delta_prev)))
@@ -136,7 +131,7 @@ class ICSMILP:
         return B[:, j_idx]
 
     def findGbar(self, delta):
-        M = np.diag([self.param["m"], self.param["m"], self.param["J"]])
+        M = np.diag([self.param["c_f"], self.param["c_f"], self.param["c_tau"]])
         return np.linalg.inv(M) @ self.findBbar(delta)
 
     @staticmethod
