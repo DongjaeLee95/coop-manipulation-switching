@@ -2,26 +2,38 @@ import yaml
 import numpy as np
 
 class RobotCtrller:
-    def __init__(self, config_path="configs/ctrl_config.yaml"):
+    def __init__(self, ctrl_config_path="configs/ctrl_config.yaml", sim_config_path="configs/sim_config.yaml"):
 
         # Load YAML configuration
-        with open(config_path, "r") as f:
-            self.config = yaml.safe_load(f)
-            self.kp_t = self.config["gain"]["kp_t"]
-            self.kd_t = self.config["gain"]["kd_t"]
-            self.kp_r = self.config["gain"]["kp_r"]
-            self.kd_r = self.config["gain"]["kd_r"]
-            self.L = self.config["system"]["L"]
-            self.m = self.config["system"]["m"]
-            self.J = self.config["system"]["J"]
+        with open(ctrl_config_path, "r") as f:
+            self.ctrl_config = yaml.safe_load(f)
+            self.kp_t = self.ctrl_config["gain"]["kp_t"]
+            self.kd_t = self.ctrl_config["gain"]["kd_t"]
+            self.kp_r = self.ctrl_config["gain"]["kp_r"]
+            self.kd_r = self.ctrl_config["gain"]["kd_r"]
+            self.J = self.ctrl_config["system"]["J"]
+
+        with open(sim_config_path, "r") as f:
+            self.sim_config = yaml.safe_load(f)
+            self.L = (self.sim_config["target"]["size"][0])/2
+            self.r = self.sim_config["robot"]["radius"]
+            self.m = self.sim_config["mass"]["robot"]
 
     def compute_actions(self, state):
         # target_pos = state["target"]["position"]
         # target_vel = state["target"]["linear_velocity"]
         
 
-        pos_ds = np.array([[-self.L, -3*self.L], [self.L, -3*self.L], [3*self.L, -self.L], [3*self.L, self.L],
-                 [self.L, 3*self.L], [-self.L, 3*self.L], [-3*self.L, self.L], [-3*self.L, -self.L]])
+        pos_ds = np.array([
+                    np.array([-self.L, -2*self.L]) + np.array([0, -self.r]),
+                    np.array([ self.L, -2*self.L]) + np.array([0, -self.r]),
+                    np.array([2*self.L, -self.L])  + np.array([ self.r, 0]),
+                    np.array([2*self.L,  self.L])  + np.array([ self.r, 0]),
+                    np.array([ self.L, 2*self.L])  + np.array([0,  self.r]),
+                    np.array([-self.L, 2*self.L])  + np.array([0,  self.r]),
+                    np.array([-2*self.L, self.L])  + np.array([-self.r, 0]),
+                    np.array([-2*self.L,-self.L])  + np.array([-self.r, 0])
+        ])
         
         ori_ds = np.array([np.pi/2, np.pi/2, np.pi, np.pi, 3*np.pi/2, 3*np.pi/2, 0, 0])
         

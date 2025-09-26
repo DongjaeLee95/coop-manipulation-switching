@@ -4,8 +4,8 @@ from visualizer.logvisualizer import LogVisualizer
 from logger.simulation_logger import SimulationLogger
 
 def main():
-    env = PushingEnv(gui=True, sim_config_path="configs/sim_config.yaml", ctrl_config_path="configs/ctrl_config.yaml")
-    ctrl = RobotCtrller(config_path="configs/ctrl_config.yaml")
+    env = PushingEnv(gui=True, sim_config_path="configs/sim_config.yaml")
+    ctrl = RobotCtrller(ctrl_config_path="configs/ctrl_config.yaml", sim_config_path="configs/sim_config.yaml")
     logger = SimulationLogger()
 
     logger.log_environment(env)

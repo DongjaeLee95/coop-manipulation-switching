@@ -7,16 +7,13 @@ import numpy as np
 
 
 class PushingEnv:
-    def __init__(self, gui=True, sim_config_path="configs/sim_config.yaml", ctrl_config_path="configs/ctrl_config.yaml"):
+    def __init__(self, gui=True, sim_config_path="configs/sim_config.yaml"):
         """Initialize simulation environment"""
 
         # Load YAML configuration
         with open(sim_config_path, "r") as f:
             self.sim_config = yaml.safe_load(f)
         
-        with open(ctrl_config_path, "r") as f:
-            self.ctrl_config = yaml.safe_load(f)
-
         self.friction = {
             "plane": self.sim_config["friction"]["plane"],
             "target": self.sim_config["friction"]["target"],
@@ -63,7 +60,7 @@ class PushingEnv:
         # robot_orientation = p.getQuaternionFromEuler([0, 0, 0])  # Cylinder stands upright
 
         # Robot positions — can be expanded
-        sys_L = self.ctrl_config["system"]["L"]
+        sys_L = (self.sim_config["target"]["size"][0])/2
         # positions = [
         #     [-sys_L, -3*sys_L, robot_height/2], 
         #     [sys_L, -3*sys_L, robot_height/2], 
