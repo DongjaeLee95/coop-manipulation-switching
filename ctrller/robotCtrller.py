@@ -19,29 +19,22 @@ class RobotCtrller:
             self.r = self.sim_config["robot"]["radius"]
             self.m = self.sim_config["mass"]["robot"]
 
-    def compute_actions(self, state):
-        # target_pos = state["target"]["position"]
-        # target_vel = state["target"]["linear_velocity"]
-        
+        # Initialize robot parameters
+        self.num_robots = self.sim_config["robot"]["num"]
+        self.delta_indicator = np.arange(self.num_robots)
+        # [a,b,...]: 1st robot in poisition a, 2nd robot in position b, etc.
 
-        pos_ds = np.array([
-                    np.array([-self.L, -2*self.L]) + np.array([0, -self.r]),
-                    np.array([ self.L, -2*self.L]) + np.array([0, -self.r]),
-                    np.array([2*self.L, -self.L])  + np.array([ self.r, 0]),
-                    np.array([2*self.L,  self.L])  + np.array([ self.r, 0]),
-                    np.array([ self.L, 2*self.L])  + np.array([0,  self.r]),
-                    np.array([-self.L, 2*self.L])  + np.array([0,  self.r]),
-                    np.array([-2*self.L, self.L])  + np.array([-self.r, 0]),
-                    np.array([-2*self.L,-self.L])  + np.array([-self.r, 0])
-        ])
-        
-        ori_ds = np.array([np.pi/2, np.pi/2, np.pi, np.pi, 3*np.pi/2, 3*np.pi/2, 0, 0])
+        # Initialize external trajectories
+        self.ext_trajs = None
+        self.ext_traj_idx = 0 
+
+    def compute_actions(self, robot_states, pos_ds, ori_ds):
         
         forces_x = []
         forces_y = []
         torques = []
 
-        for idx, robot_state in enumerate(state["robots"]):
+        for idx, robot_state in enumerate(robot_states):
             pos = np.array(robot_state["position"][:2]).reshape(2, 1)
             vel = np.array(robot_state["linear_velocity"][:2]).reshape(2, 1)
             rot = np.array(robot_state["rotation_matrix"]).reshape(3, 3)
@@ -65,7 +58,85 @@ class RobotCtrller:
             forces_y.append(force[1])
             torques.append(torque)
 
-        return forces_x, forces_y, torques
+        return forces_x, forces_y, torques 
+    
+    def motion_planner(self, obj_state, ext_trajs=None):
+        """
+        Returns:
+            pos_ds: (N, 2) desired positions for each robot
+            ori_ds: (N,) desired orientations for each robot
+        """
+        # ext_trajs should change driectly to None after having some none-None value
+        if ext_trajs is not None:
+            self.ext_trajs = ext_trajs
+            self.ext_traj_idx = 0
+
+        if self.ext_trajs is not None:
+            # Use current external trajectory
+            pos_ds = np.array(self.ext_trajs["positions"][self.ext_traj_idx])
+            ori_ds = np.array(self.ext_trajs["orientations"][self.ext_traj_idx])
+
+            self.ext_traj_idx += 1
+            if self.ext_traj_idx >= len(self.ext_trajs):
+                # Reset trajectory once done
+                self.ext_trajs = None
+                self.ext_traj_idx = 0
+                self.delta_indicator = self.ext_trajs["delta_indicator"]
+
+            return pos_ds, ori_ds
+        else:
+            pos_ds = []
+            ori_ds = []
+
+            obj_pos = np.array(obj_state["position"][:2]).reshape(2,)               # (2,)
+            obj_rot = np.array(obj_state["rotation_matrix"]).reshape(3, 3)          # (3,3)
+            obj_ori = float(np.arctan2(obj_rot[1, 0], obj_rot[0, 0]))     # yaw
+            # obj_vel = np.array(obj_state["linear_velocity"][:2]).reshape(2,)      # (2,)
+            # obj_ang_vel = float(obj_state["angular_velocity"][2])                 # scalar
+
+            # 2D rotation matrix from target orientation
+            R = np.array([
+                [np.cos(obj_ori), -np.sin(obj_ori)],
+                [np.sin(obj_ori),  np.cos(obj_ori)]
+            ])
+
+            for idx in self.delta_indicator:
+                # Relative position from object center before rotation
+                if idx == 0:
+                    local_pos = np.array([-self.L, -2 * self.L]) + np.array([0, -self.r])
+                    local_ori = np.pi / 2
+                elif idx == 1:
+                    local_pos = np.array([self.L, -2 * self.L]) + np.array([0, -self.r])
+                    local_ori = np.pi / 2
+                elif idx == 2:
+                    local_pos = np.array([2 * self.L, -self.L]) + np.array([self.r, 0])
+                    local_ori = np.pi
+                elif idx == 3:
+                    local_pos = np.array([2 * self.L, self.L]) + np.array([self.r, 0])
+                    local_ori = np.pi
+                elif idx == 4:
+                    local_pos = np.array([self.L, 2 * self.L]) + np.array([0, self.r])
+                    local_ori = 3 * np.pi / 2
+                elif idx == 5:
+                    local_pos = np.array([-self.L, 2 * self.L]) + np.array([0, self.r])
+                    local_ori = 3 * np.pi / 2
+                elif idx == 6:
+                    local_pos = np.array([-2 * self.L, self.L]) + np.array([-self.r, 0])
+                    local_ori = 0
+                elif idx == 7:
+                    local_pos = np.array([-2 * self.L, -self.L]) + np.array([-self.r, 0])
+                    local_ori = 0
+                else:
+                    raise ValueError(f"Invalid contact index: {idx}")
+
+                # Rotate and translate local position based on target
+                world_pos = obj_pos + R @ local_pos
+                world_ori = (obj_ori + local_ori) % (2 * np.pi)
+
+                pos_ds.append(world_pos)
+                ori_ds.append(world_ori)
+
+            return np.array(pos_ds), np.array(ori_ds)
     
     def rot_z(self,psi):
         return np.array([[np.cos(psi), -np.sin(psi), 0], 

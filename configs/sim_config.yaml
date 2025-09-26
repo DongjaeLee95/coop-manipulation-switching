@@ -1,10 +1,12 @@
 # config/sim_config.yaml
 
 friction:
-  plane: 1.0
-  target: 0.8
+  plane: 1 # 0.1
+  target: 0.8 # 0.1
   robot_t: 0.0  # lateral friction
   robot_r: 10.0 # rolling friction
+
+gravity: 9.81
 
 mass:
   target: 10.0
@@ -12,6 +14,7 @@ mass:
   robot: 0.5
 
 robot:
+  num: 8
   shape: cylinder
   radius: 0.1
   height: 0.1

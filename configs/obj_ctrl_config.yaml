@@ -1,0 +1,15 @@
+# obj_ctrl_config.yaml
+
+# System dimensions
+qdim: 3
+udim: 8  # or 12, depending on your actuator setup
+
+# Control gains
+Kq:  # 3x3 diagonal matrix
+  - [3.0, 0.0, 0.0]
+  - [0.0, 3.0, 0.0]
+  - [0.0, 0.0, 3.0]
+
+V_decay: 0.1
+
+c: 1

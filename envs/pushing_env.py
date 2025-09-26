@@ -20,7 +20,7 @@ class PushingEnv:
             "robot_t": self.sim_config["friction"]["robot_t"],
             "robot_r": self.sim_config["friction"]["robot_r"]
         }
-        self.gravity = [0, 0, -9.8]
+        self.gravity = [0, 0, -self.sim_config["gravity"]]
 
         # Connect to PyBullet
         if gui:
@@ -71,6 +71,8 @@ class PushingEnv:
         #     [-3*sys_L, sys_L, robot_height/2], 
         #     [-3*sys_L, -sys_L, robot_height/2]
         # ]
+
+        # TODO - based on the number of robots, change the belows
         positions = [
             [-2*sys_L, -3*sys_L, robot_height/2], 
             [2*sys_L, -3*sys_L, robot_height/2], 
