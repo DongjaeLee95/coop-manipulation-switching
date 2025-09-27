@@ -1,5 +1,11 @@
 import yaml
 import numpy as np
+from enum import IntEnum
+import time
+
+class Mode(IntEnum):
+    CON = 0
+    NAV = 1
 
 class RobotCtrller:
     def __init__(self, ctrl_config_path="configs/ctrl_config.yaml", sim_config_path="configs/sim_config.yaml"):
@@ -26,9 +32,33 @@ class RobotCtrller:
 
         # Initialize external trajectories
         self.ext_trajs = None
-        self.ext_traj_idx = 0 
+        self.ext_traj_idx = 0
 
-    def compute_actions(self, robot_states, pos_ds, ori_ds):
+        # Interaction mode, Naviation mode
+        self.mode = Mode.NAV
+        self.wait_duration = 2.0  # seconds
+        self.wait_timer_start = None
+    
+    def mode_switch_law(self, trigger = False):
+        if self.mode == Mode.CON:
+            if trigger:
+                self.mode = Mode.NAV
+                print("CHANGED TO NAVIGATION MODE")
+                self.wait_timer_start = None  # Reset timer
+        elif self.mode == Mode.NAV:
+            if self.ext_trajs is None:  # Navigation finished
+                if self.wait_timer_start is None:
+                    # First time hitting this condition
+                    self.wait_timer_start = time.time()
+                elif time.time() - self.wait_timer_start >= self.wait_duration:
+                    # Waited long enough → switch to control
+                    self.mode = Mode.CON
+                    print("CHANGED TO CONTACT MODE")
+                    self.wait_timer_start = None  # Reset for next time
+
+    def compute_actions(self, robot_states, robot_pushs, pos_ds, ori_ds, trigger = False):
+        
+        self.mode_switch_law(trigger)
         
         forces_x = []
         forces_y = []
@@ -53,6 +83,9 @@ class RobotCtrller:
 
             force = self.m*rot[:2, :2].T@(self.kp_t*e_p + self.kd_t*e_v)
             torque = self.J*(self.kp_r*e_R[2] + self.kd_r*e_om[2])
+
+            if self.mode == Mode.CON:
+                force[0] += robot_pushs[idx] # additional pushing force
             
             forces_x.append(force[0])
             forces_y.append(force[1])

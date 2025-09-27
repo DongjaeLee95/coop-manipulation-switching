@@ -23,6 +23,9 @@ class SimulationLogger:
         }
 
     def log_step(self, time, state, actions):
+        u = actions.get("u", None)
+        ctrl_mode = actions.get("ctrl_mode", None)
+        
         step_data = {
             "time": time,
             "robots": state["robots"],
@@ -31,10 +34,12 @@ class SimulationLogger:
                 {
                     "force_x": actions["forces_x"][i],
                     "force_y": actions["forces_y"][i],
-                    "torque": actions["torques"][i]
+                    "torque": actions["torques"][i],
+                    "u": float(u[i]) if u is not None else None
                 }
                 for i in range(len(state["robots"]))
-            ]
+            ],
+            "ctrl_mode": ctrl_mode  # Can be str or int
         }
         self.data["steps"].append(step_data)
 

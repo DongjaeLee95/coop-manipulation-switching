@@ -6,10 +6,10 @@ udim: 8  # or 12, depending on your actuator setup
 
 # Control gains
 Kq:  # 3x3 diagonal matrix
-  - [3.0, 0.0, 0.0]
-  - [0.0, 3.0, 0.0]
-  - [0.0, 0.0, 3.0]
+  - [20.0, 0.0, 0.0]
+  - [0.0, 20.0, 0.0]
+  - [0.0, 0.0, 20.0]
 
-V_decay: 0.1
+V_decay: 5
 
 c: 1

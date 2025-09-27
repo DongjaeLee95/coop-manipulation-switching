@@ -22,6 +22,9 @@ class PushingEnv:
         }
         self.gravity = [0, 0, -self.sim_config["gravity"]]
 
+        self.num_robots = self.sim_config["robot"]["num"]
+        self.robot_init_id = self.sim_config["robot"]["init_id"]
+
         # Connect to PyBullet
         if gui:
             p.connect(p.GUI)
@@ -61,35 +64,30 @@ class PushingEnv:
 
         # Robot positions — can be expanded
         sys_L = (self.sim_config["target"]["size"][0])/2
-        # positions = [
-        #     [-sys_L, -3*sys_L, robot_height/2], 
-        #     [sys_L, -3*sys_L, robot_height/2], 
-        #     [3*sys_L, -sys_L, robot_height/2], 
-        #     [3*sys_L, sys_L, robot_height/2],
-        #     [sys_L, 3*sys_L, robot_height/2], 
-        #     [-sys_L, 3*sys_L, robot_height/2], 
-        #     [-3*sys_L, sys_L, robot_height/2], 
-        #     [-3*sys_L, -sys_L, robot_height/2]
-        # ]
 
-        # TODO - based on the number of robots, change the belows
-        positions = [
-            [-2*sys_L, -3*sys_L, robot_height/2], 
-            [2*sys_L, -3*sys_L, robot_height/2], 
-            [3*sys_L, -2*sys_L, robot_height/2], 
-            [3*sys_L, 2*sys_L, robot_height/2],
-            [2*sys_L, 3*sys_L, robot_height/2], 
-            [-2*sys_L, 3*sys_L, robot_height/2], 
-            [-3*sys_L, 2*sys_L, robot_height/2], 
-            [-3*sys_L, -2*sys_L, robot_height/2]
+        positions_cand = [
+            [-2*sys_L, -4*sys_L, robot_height/2], 
+            [2*sys_L, -4*sys_L, robot_height/2], 
+            [4*sys_L, -2*sys_L, robot_height/2], 
+            [4*sys_L, 2*sys_L, robot_height/2],
+            [2*sys_L, 4*sys_L, robot_height/2], 
+            [-2*sys_L, 4*sys_L, robot_height/2], 
+            [-4*sys_L, 2*sys_L, robot_height/2], 
+            [-4*sys_L, -2*sys_L, robot_height/2]
         ]
-        orientations = 1.2*np.array([
+        orientations_cand = np.array([
             np.pi/2, np.pi/2, 
             np.pi, np.pi, 
             3*np.pi/2, 3*np.pi/2, 
             0, 0
         ])
-        
+    
+        positions = []
+        orientations = []
+        for i in range(self.num_robots):
+            positions.append(positions_cand[self.robot_init_id[i]])
+            orientations.append(orientations_cand[self.robot_init_id[i]])
+
         for i, pos in enumerate(positions):
             robot_orientation = p.getQuaternionFromEuler([0, 0, orientations[i]])
             robot_id = p.createMultiBody(

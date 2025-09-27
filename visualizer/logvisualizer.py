@@ -1,6 +1,7 @@
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
+import math
 
 class LogVisualizer:
     def __init__(self, log_path="logs/simulation_log.pkl"):
@@ -24,6 +25,11 @@ class LogVisualizer:
         self.target_vel_x = []
         self.target_vel_y = []
         self.target_ang_vel = []
+
+        self.u_matrix = []        # Will store control inputs per time step
+        self.ctrl_modes = []      # Will store mode (0=CON, 1=NAV) per time step
+
+        self.num_robots = len(self.data["steps"][0]["robots"])
 
         self._extract_data()
 
@@ -58,6 +64,16 @@ class LogVisualizer:
             self.target_vel_x.append(target["linear_velocity"][0])
             self.target_vel_y.append(target["linear_velocity"][1])
             self.target_ang_vel.append(target["angular_velocity"][2])
+
+            # Extract u for all robots in this step
+            u_values = [a.get("u", 0.0) for a in step["actions"]]
+            self.u_matrix.append(u_values)
+
+            # Extract controller mode (default to 0 if not present)
+            self.ctrl_modes.append(step.get("ctrl_mode", 0))
+
+        self.u_matrix = np.array(self.u_matrix)
+        self.ctrl_modes = np.array(self.ctrl_modes)
 
     def plot_robot1(self):
         fig, axs = plt.subplots(3, 3, figsize=(15, 10))
@@ -99,4 +115,49 @@ class LogVisualizer:
             ax.grid(True)
 
         plt.tight_layout()
+        plt.show()
+
+    def plot_u_with_mode(self):
+        if "u" not in self.data["steps"][0]["actions"][0]:
+            print("No 'u' data found in the logs. Skipping u plot.")
+            return
+
+        time = self.time
+        u_matrix = self.u_matrix
+        ctrl_modes = self.ctrl_modes
+
+        num_cols = 2
+        num_rows = math.ceil(self.num_robots / num_cols)
+
+        fig, axs = plt.subplots(num_rows, num_cols, figsize=(12, 3 * num_rows), sharex=True)
+        axs = axs.flatten()  # Make indexing uniform
+
+        for i in range(self.num_robots):
+            axs[i].plot(time, u_matrix[:, i], label=f"u_{i}")
+            axs[i].set_ylabel(f"u_{i}")
+            axs[i].grid(True)
+
+            # Shade background where ctrl_mode == 1 (NAV)
+            in_nav = False
+            start_t = 0
+            for j in range(len(ctrl_modes)):
+                if ctrl_modes[j] == 1 and not in_nav:
+                    start_t = time[j]
+                    in_nav = True
+                elif ctrl_modes[j] != 1 and in_nav:
+                    end_t = time[j]
+                    axs[i].axvspan(start_t, end_t, color='gray', alpha=0.3)
+                    in_nav = False
+            if in_nav:
+                axs[i].axvspan(start_t, time[-1], color='gray', alpha=0.3)
+
+            axs[i].legend()
+
+        # Hide any unused subplots if num_robots is odd
+        for j in range(self.num_robots, len(axs)):
+            fig.delaxes(axs[j])
+
+        axs[-1].set_xlabel("Time [s]")
+        plt.suptitle("Control Inputs (u) with NAV Mode Highlighted")
+        plt.tight_layout(rect=[0, 0, 1, 0.97])
         plt.show()

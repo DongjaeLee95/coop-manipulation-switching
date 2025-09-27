@@ -31,7 +31,7 @@ class ObjCtrller:
             self.param["c_f"] = self.param["mu"]*self.param["m"]*self.param["g"]
             self.param["c_tau"] = self.param["c"]*self.param["r"]*self.param["c_f"]
 
-    def compute(self, q, x_d, delta, iter_idx):
+    def compute(self, obj_state, x_d, delta):
         """
         Main compute function for the controller.
 
@@ -49,10 +49,16 @@ class ObjCtrller:
             x_max : float, max of trigger_x
         """
         # --- High-level control ---
-        psi = q[2]
+        obj_pos = np.array(obj_state["position"][:2]).reshape(2,)   
+        obj_rot = np.array(obj_state["rotation_matrix"]).reshape(3, 3)
+        obj_ori = float(np.arctan2(obj_rot[1, 0], obj_rot[0, 0]))
+        
+        q = np.vstack([obj_pos.reshape(2, 1), [obj_ori]]) 
+
+        psi = float(q[2])
         qdim = self.param["qdim"]
-        q_d = x_d[0:qdim]
-        qdot_d = x_d[qdim:]
+        q_d = x_d[0:qdim].reshape(-1,1)
+        qdot_d = x_d[qdim:].reshape(-1,1)
 
         R = np.array([
             [np.cos(psi), -np.sin(psi)],
