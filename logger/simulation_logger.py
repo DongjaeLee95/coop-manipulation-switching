@@ -22,7 +22,7 @@ class SimulationLogger:
             "robot_inertias": [env.get_inertia(r) for r in env.robots]
         }
 
-    def log_step(self, time, state, actions):
+    def log_step(self, time, state, actions, V_lyap):
         u = actions.get("u", None)
         ctrl_mode = actions.get("ctrl_mode", None)
         
@@ -39,7 +39,8 @@ class SimulationLogger:
                 }
                 for i in range(len(state["robots"]))
             ],
-            "ctrl_mode": ctrl_mode  # Can be str or int
+            "ctrl_mode": ctrl_mode,  # Can be str or int
+            "V_lyap": V_lyap
         }
         self.data["steps"].append(step_data)
 

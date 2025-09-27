@@ -1,12 +1,12 @@
 # config/ctrl_config.yaml
 
 gain:
-  kp_t: 30.0
-  kd_t: 20.0
-  kp_r: 30.0
-  kd_r: 20.0
+  kp_t: 50.0
+  kd_t: 30.0
+  kp_r: 50.0
+  kd_r: 30.0
 
 system:
   # L: 0.3
-  # m: 0.1
+  # m: 0.5
   J: 0.0025

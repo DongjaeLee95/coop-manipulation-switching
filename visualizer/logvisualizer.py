@@ -29,6 +29,8 @@ class LogVisualizer:
         self.u_matrix = []        # Will store control inputs per time step
         self.ctrl_modes = []      # Will store mode (0=CON, 1=NAV) per time step
 
+        self.V_lyap = []
+
         self.num_robots = len(self.data["steps"][0]["robots"])
 
         self._extract_data()
@@ -45,6 +47,7 @@ class LogVisualizer:
             robot = step["robots"][0]
             action = step["actions"][0]
             target = step["target"]
+            V_lyap = step["V_lyap"]
 
             # Robot 1 data
             self.pos_x.append(robot["position"][0])
@@ -71,6 +74,8 @@ class LogVisualizer:
 
             # Extract controller mode (default to 0 if not present)
             self.ctrl_modes.append(step.get("ctrl_mode", 0))
+
+            self.V_lyap.append(V_lyap)
 
         self.u_matrix = np.array(self.u_matrix)
         self.ctrl_modes = np.array(self.ctrl_modes)
@@ -99,7 +104,7 @@ class LogVisualizer:
         plt.show()
 
     def plot_target_box(self):
-        fig, axs = plt.subplots(2, 3, figsize=(15, 6))
+        fig, axs = plt.subplots(2, 4, figsize=(15, 6))
         axs = axs.flatten()
 
         axs[0].plot(self.time, self.target_pos_x); axs[0].set_title("Target Position X [m]")
@@ -109,6 +114,8 @@ class LogVisualizer:
         axs[3].plot(self.time, self.target_vel_x); axs[3].set_title("Target Velocity X [m/s]")
         axs[4].plot(self.time, self.target_vel_y); axs[4].set_title("Target Velocity Y [m/s]")
         axs[5].plot(self.time, self.target_ang_vel); axs[5].set_title("Target Angular Velocity [rad/s]")
+
+        axs[6].plot(self.time, self.V_lyap); axs[6].set_title("Lyapunov function")
 
         for ax in axs:
             ax.set_xlabel("Time [s]")

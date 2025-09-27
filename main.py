@@ -64,7 +64,7 @@ def main():
                 "torques": torques,
                 "u": u,
                 "ctrl_mode": int(ctrl.mode)  # convert enum to int for logging
-            })
+            }, V)
 
             t += dt
 
@@ -72,7 +72,7 @@ def main():
         print("Simulation terminated!")
         logger.save()
         visualizer = LogVisualizer(log_path=logger.log_path)
-        visualizer.plot_robot1()
+        # visualizer.plot_robot1()
         visualizer.plot_target_box()
         visualizer.plot_u_with_mode()
 
