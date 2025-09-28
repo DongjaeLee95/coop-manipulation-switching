@@ -3,6 +3,7 @@ from ctrller.robotCtrller import RobotCtrller
 from visualizer.logvisualizer import LogVisualizer
 from logger.simulation_logger import SimulationLogger
 from ctrller.objCtrller import ObjCtrller
+from ctrller.switching_law import SwitingLaw
 from enum import IntEnum
 import numpy as np
 
@@ -17,9 +18,9 @@ def main():
     env = PushingEnv(gui=True, sim_config_path="configs/sim_config.yaml")
     ctrl = RobotCtrller(ctrl_config_path="configs/ctrl_config.yaml", sim_config_path="configs/sim_config.yaml")
     obj_ctrl = ObjCtrller(obj_ctrl_config_path="configs/obj_ctrl_config.yaml", sim_config_path="configs/sim_config.yaml")
+    switching_law = SwitingLaw(obj_ctrl_config_path="configs/obj_ctrl_config.yaml", sim_config_path="configs/sim_config.yaml")
 
     logger = SimulationLogger()
-
     logger.log_environment(env)
 
     try:
@@ -41,17 +42,20 @@ def main():
 
         while True:
             state = env.get_state()
-            # TODO - put multi-agent path finder module
+            
+            # switching law & object(target) controller
+            _, delta, switch_trigger, compt_time, rho = switching_law.compute(state["target"], obj_d, delta)
+            u, _, V, _, _ = obj_ctrl.compute(state["target"], obj_d, delta)
+
+            # multi-agent path finding (collision-free)
+            # if switch_trigger:
+            #     delta_indicator, ext_trajs = MAPF.compute(state["target"], state["robots"], delta)
+            # else:
             ext_trajs = None
-            # MILP-based switching law
-                # output: delta_indicator, delta
 
-            # object controller - if successfully moved to the designated contact point
-            u, tau, V, _, _ = obj_ctrl.compute(state["target"], obj_d, delta)
-
-            trigger = False
-            pos_ds, ori_ds = ctrl.motion_planner(state["target"], ext_trajs)
-            forces_x, forces_y, torques = ctrl.compute_actions(state["robots"], u, pos_ds, ori_ds, trigger)
+            # robot motion generator & robot controller
+            pos_ds, ori_ds = ctrl.motion_planner(state["target"], delta_indicator, ext_trajs)
+            forces_x, forces_y, torques = ctrl.compute_actions(state["robots"], u, pos_ds, ori_ds, switch_trigger)
             if ctrl.mode == Mode.NAV:
                 u = np.zeros(env.num_robots)
 
@@ -64,7 +68,13 @@ def main():
                 "torques": torques,
                 "u": u,
                 "ctrl_mode": int(ctrl.mode)  # convert enum to int for logging
-            }, V)
+            }, {
+                "V_lyap": V,
+                "delta": delta,
+                "trigger": switch_trigger,
+                "MILP_compt_time": compt_time,
+                "MILP_rho": rho
+            })
 
             t += dt
 

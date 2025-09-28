@@ -13,3 +13,6 @@ Kq:  # 3x3 diagonal matrix
 V_decay: 2 # 5
 
 c: 1
+
+# Switching law related
+uM: 10

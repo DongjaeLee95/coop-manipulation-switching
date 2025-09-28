@@ -93,7 +93,7 @@ class RobotCtrller:
 
         return forces_x, forces_y, torques 
     
-    def motion_planner(self, obj_state, ext_trajs=None):
+    def motion_planner(self, obj_state, delta_indicator, ext_trajs=None):
         """
         Returns:
             pos_ds: (N, 2) desired positions for each robot
@@ -114,7 +114,7 @@ class RobotCtrller:
                 # Reset trajectory once done
                 self.ext_trajs = None
                 self.ext_traj_idx = 0
-                self.delta_indicator = self.ext_trajs["delta_indicator"]
+                self.delta_indicator = delta_indicator
 
             return pos_ds, ori_ds
         else:

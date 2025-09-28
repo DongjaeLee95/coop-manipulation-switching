@@ -1,20 +1,44 @@
 import numpy as np
 import time
+import yaml
+import math
 from docplex.mp.model import Model
 
-class ICSMILP:
-    def __init__(self, param):
-        self.param = param
+class SwitingLaw:
+    def __init__(self, obj_ctrl_config_path="configs/obj_ctrl_config.yaml", sim_config_path="configs/sim_config.yaml"):
+        
+        self.param = {}
+        with open(obj_ctrl_config_path, "r") as f:
+            self.obj_ctrl_config = yaml.safe_load(f)
+            self.param["qdim"] = self.obj_ctrl_config["qdim"]
+            self.param["udim"] = self.obj_ctrl_config["udim"]
+            self.param["Kq"] = np.array(self.obj_ctrl_config["Kq"])
+            self.param["V_decay"] = self.obj_ctrl_config["V_decay"]
+            self.param["c"] = self.obj_ctrl_config["c"]
+            self.param["uM"] = self.obj_ctrl_config["uM"]
+
+        with open(sim_config_path, "r") as f:
+            self.sim_config = yaml.safe_load(f)
+            self.param["L"] = (self.sim_config["target"]["size"][0])/2
+            self.param["m"] = self.sim_config["mass"]["target"]
+            self.param["mu"] = math.sqrt(self.sim_config["friction"]["plane"] * 
+                                        self.sim_config["friction"]["target"])
+            self.param["g"] = self.sim_config["gravity"]
+
+            self.param["r"] = math.sqrt(5)*self.param["L"]
+            self.param["c_f"] = self.param["mu"]*self.param["m"]*self.param["g"]
+            self.param["c_tau"] = self.param["c"]*self.param["r"]*self.param["c_f"]
+
         self.mdl = Model(name="ICS_MILP")
-        self.u = self.mdl.continuous_var_list(param["udim"], lb=0, name="u")
-        self.delta = self.mdl.binary_var_list(param["udim"], name="delta")
-        self.z = self.mdl.continuous_var_list(param["udim"], lb=0, name="z")
+        self.u = self.mdl.continuous_var_list(self.param["udim"], lb=0, name="u")
+        self.delta = self.mdl.binary_var_list(self.param["udim"], name="delta")
+        self.z = self.mdl.continuous_var_list(self.param["udim"], lb=0, name="z")
         self.rho = self.mdl.continuous_var(lb=0, name="rho")
 
         self.mdl.maximize(self.rho)
 
-        uM = param["uM"]
-        for i in range(param["udim"]):
+        uM = self.param["uM"]
+        for i in range(self.param["udim"]):
             self.mdl.add_constraint(self.z[i] <= self.u[i])
             self.mdl.add_constraint(self.u[i] <= uM * (1 - self.delta[i]) + self.z[i])
             self.mdl.add_constraint(self.z[i] <= uM * self.delta[i])
@@ -25,7 +49,7 @@ class ICSMILP:
         # Sum(delta) = sum(delta_prev) → added dynamically in compute()
         self.delta_sum_constraint = None
 
-    def compute(self, q, x_d, tau, delta_prev, u_prev, iter_idx):
+    def compute(self, obj_state, x_d, delta_prev):
         """
         Python version of ICS_MILP.m
 
@@ -36,11 +60,16 @@ class ICSMILP:
             compt_time : float
             rho : float
         """
-        psi = q[2]
+        obj_pos = np.array(obj_state["position"][:2]).reshape(2,)   
+        obj_rot = np.array(obj_state["rotation_matrix"]).reshape(3, 3)
+        obj_ori = float(np.arctan2(obj_rot[1, 0], obj_rot[0, 0]))
+        
+        q = np.vstack([obj_pos.reshape(2, 1), [obj_ori]]) 
 
+        psi = float(q[2])
         qdim = self.param["qdim"]
-        q_d = x_d[0:qdim]
-        qdot_d = x_d[qdim:]
+        q_d = x_d[0:qdim].reshape(-1,1)
+        qdot_d = x_d[qdim:].reshape(-1,1)
 
         R = np.array([[np.cos(psi), -np.sin(psi)],
                       [np.sin(psi),  np.cos(psi)]])
@@ -51,6 +80,7 @@ class ICSMILP:
         G = F @ np.linalg.inv(M)
 
         eq = q_d - q.reshape(-1,1)
+        tau = M @ (F.T @ (qdot_d + self.param["Kq"] @ eq))
 
         Bbar = self.findBbar(delta_prev)
 
@@ -102,7 +132,7 @@ class ICSMILP:
             delta_val = np.array([round(sol[self.delta[i]]) for i in range(self.param["udim"])])
             rho_val = sol[self.rho]
 
-            return u_val, delta_val, True, compt_time, rho_val
+            return u_val, delta_val.flatten(), True, compt_time, rho_val
 
         else:
             # Not triggered → keep previous delta, reset u
@@ -111,14 +141,14 @@ class ICSMILP:
     # === Helper functions ===
     def findB(self, delta):
         p = self.param
-        B1d = delta[0]*np.array([0,1,-p["L1"]])
-        B2d = delta[1]*np.array([0,1, p["L2"]])
-        B3d = delta[2]*np.array([-1,0,-p["L3"]])
-        B4d = delta[3]*np.array([-1,0, p["L4"]])
-        B5d = delta[4]*np.array([0,-1,-p["L5"]])
-        B6d = delta[5]*np.array([0,-1, p["L6"]])
-        B7d = delta[6]*np.array([1,0,-p["L7"]])
-        B8d = delta[7]*np.array([1,0, p["L8"]])
+        B1d = delta[0]*np.array([0,1,-p["L"]])
+        B2d = delta[1]*np.array([0,1, p["L"]])
+        B3d = delta[2]*np.array([-1,0,-p["L"]])
+        B4d = delta[3]*np.array([-1,0, p["L"]])
+        B5d = delta[4]*np.array([0,-1,-p["L"]])
+        B6d = delta[5]*np.array([0,-1, p["L"]])
+        B7d = delta[6]*np.array([1,0,-p["L"]])
+        B8d = delta[7]*np.array([1,0, p["L"]])
         return np.column_stack([B1d, B2d, B3d, B4d, B5d, B6d, B7d, B8d])
 
     def findubar(self, u, delta):
