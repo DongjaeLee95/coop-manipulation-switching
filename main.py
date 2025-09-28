@@ -4,6 +4,7 @@ from visualizer.logvisualizer import LogVisualizer
 from logger.simulation_logger import SimulationLogger
 from ctrller.objCtrller import ObjCtrller
 from ctrller.switching_law import SwitingLaw
+from planner.robot_slot_planner import RobotSlotPlanner
 from enum import IntEnum
 import numpy as np
 
@@ -19,6 +20,7 @@ def main():
     ctrl = RobotCtrller(ctrl_config_path="configs/ctrl_config.yaml", sim_config_path="configs/sim_config.yaml")
     obj_ctrl = ObjCtrller(obj_ctrl_config_path="configs/obj_ctrl_config.yaml", sim_config_path="configs/sim_config.yaml")
     switching_law = SwitingLaw(obj_ctrl_config_path="configs/obj_ctrl_config.yaml", sim_config_path="configs/sim_config.yaml")
+    slot_planner = RobotSlotPlanner(sim_config_path="configs/sim_config.yaml")
 
     logger = SimulationLogger()
     logger.log_environment(env)
@@ -48,10 +50,10 @@ def main():
             u, _, V, _, _ = obj_ctrl.compute(state["target"], obj_d, delta)
 
             # multi-agent path finding (collision-free)
-            # if switch_trigger:
-            #     delta_indicator, ext_trajs = MAPF.compute(state["target"], state["robots"], delta)
-            # else:
-            ext_trajs = None
+            if switch_trigger:
+                delta_indicator, ext_trajs = slot_planner.compute(state["robots"], state["target"], delta, delta_indicator)
+            else:
+                ext_trajs = None
 
             # robot motion generator & robot controller
             pos_ds, ori_ds = ctrl.motion_planner(state["target"], delta_indicator, ext_trajs)
