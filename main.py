@@ -12,9 +12,6 @@ class Mode(IntEnum):
     CON = 0
     NAV = 1
 
-def deg2rad(ang):
-    return ang*np.pi/180
-
 def main():
     env = PushingEnv(gui=True, sim_config_path="configs/sim_config.yaml")
     ctrl = RobotCtrller(ctrl_config_path="configs/ctrl_config.yaml", sim_config_path="configs/sim_config.yaml")
@@ -40,11 +37,14 @@ def main():
             delta[i] = 1
 
         # set object desired pos, orientation
-        obj_d = np.array([1.0, 1.0, deg2rad(90), 0.0, 0.0, 0.0])
+        obj_d = np.array([0, 0, np.deg2rad(90), 0.0, 0.0, 0.0])
 
         while True:
             state = env.get_state()
             
+            # switch_trigger = False
+            # compt_time = np.nan
+            # rho = np.nan
             # switching law & object(target) controller
             _, delta, switch_trigger, compt_time, rho = switching_law.compute(state["target"], obj_d, delta)
             u, _, V, _, _ = obj_ctrl.compute(state["target"], obj_d, delta)
@@ -52,11 +52,14 @@ def main():
             # multi-agent path finding (collision-free)
             if switch_trigger:
                 delta_indicator, ext_trajs = slot_planner.compute(state["robots"], state["target"], delta, delta_indicator)
+                # visualize ext_trajs based on current robot pose and target pose
             else:
                 ext_trajs = None
 
             # robot motion generator & robot controller
             pos_ds, ori_ds = ctrl.motion_planner(state["target"], delta_indicator, ext_trajs)
+            if switch_trigger:
+                print("yes")
             forces_x, forces_y, torques = ctrl.compute_actions(state["robots"], u, pos_ds, ori_ds, switch_trigger)
             if ctrl.mode == Mode.NAV:
                 u = np.zeros(env.num_robots)
@@ -87,6 +90,7 @@ def main():
         # visualizer.plot_robot1()
         visualizer.plot_target_box()
         visualizer.plot_u_with_mode()
+        visualizer.show()
 
     env.close()
 

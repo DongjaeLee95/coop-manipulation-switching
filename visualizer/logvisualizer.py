@@ -26,10 +26,14 @@ class LogVisualizer:
         self.target_vel_y = []
         self.target_ang_vel = []
 
+        self.V_lyap = []
+        self.delta = []
+        self.trigger = []
+        self.MILP_compt_time = []
+        self.MILP_rho = []
+
         self.u_matrix = []        # Will store control inputs per time step
         self.ctrl_modes = []      # Will store mode (0=CON, 1=NAV) per time step
-
-        self.V_lyap = []
 
         self.num_robots = len(self.data["steps"][0]["robots"])
 
@@ -40,6 +44,9 @@ class LogVisualizer:
         siny_cosp = 2 * (w * z + x * y)
         cosy_cosp = 1 - 2 * (y * y + z * z)
         return np.arctan2(siny_cosp, cosy_cosp)
+    
+    def show(self):
+        plt.show()
 
     def _extract_data(self):
         for step in self.data["steps"]:
@@ -47,7 +54,7 @@ class LogVisualizer:
             robot = step["robots"][0]
             action = step["actions"][0]
             target = step["target"]
-            V_lyap = step["V_lyap"]
+            switching = step["switching"]
 
             # Robot 1 data
             self.pos_x.append(robot["position"][0])
@@ -68,14 +75,19 @@ class LogVisualizer:
             self.target_vel_y.append(target["linear_velocity"][1])
             self.target_ang_vel.append(target["angular_velocity"][2])
 
+            # switching law-related
+            self.V_lyap.append(switching["V_lyap"])
+            self.delta.append(switching["delta"])
+            self.trigger.append(switching["trigger"])
+            self.MILP_compt_time.append(switching["MILP_compt_time"])
+            self.MILP_rho.append(switching["MILP_rho"])
+
             # Extract u for all robots in this step
             u_values = [a.get("u", 0.0) for a in step["actions"]]
             self.u_matrix.append(u_values)
 
             # Extract controller mode (default to 0 if not present)
             self.ctrl_modes.append(step.get("ctrl_mode", 0))
-
-            self.V_lyap.append(V_lyap)
 
         self.u_matrix = np.array(self.u_matrix)
         self.ctrl_modes = np.array(self.ctrl_modes)
@@ -101,7 +113,6 @@ class LogVisualizer:
             ax.grid(True)
 
         plt.tight_layout()
-        plt.show()
 
     def plot_target_box(self):
         fig, axs = plt.subplots(2, 4, figsize=(15, 6))
@@ -121,8 +132,7 @@ class LogVisualizer:
             ax.set_xlabel("Time [s]")
             ax.grid(True)
 
-        plt.tight_layout()
-        plt.show()
+        plt.tight_layout()        
 
     def plot_u_with_mode(self):
         if "u" not in self.data["steps"][0]["actions"][0]:
@@ -167,4 +177,4 @@ class LogVisualizer:
         axs[-1].set_xlabel("Time [s]")
         plt.suptitle("Control Inputs (u) with NAV Mode Highlighted")
         plt.tight_layout(rect=[0, 0, 1, 0.97])
-        plt.show()
+        

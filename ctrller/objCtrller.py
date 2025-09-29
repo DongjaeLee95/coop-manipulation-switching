@@ -22,7 +22,7 @@ class ObjCtrller:
         with open(sim_config_path, "r") as f:
             self.sim_config = yaml.safe_load(f)
             self.param["L"] = (self.sim_config["target"]["size"][0])/2
-            self.param["m"] = self.sim_config["mass"]["target"]
+            self.param["m"] = 2*self.sim_config["mass"]["target"]
             self.param["mu"] = math.sqrt(self.sim_config["friction"]["plane"] * 
                                         self.sim_config["friction"]["target"])
             self.param["g"] = self.sim_config["gravity"]

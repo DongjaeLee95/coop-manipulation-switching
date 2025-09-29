@@ -64,6 +64,7 @@ class RobotSlotPlanner:
     def plan_paths(self, robots, obj_state, new_delta_indicator, previous_delta_indicator):
         reservation = {}
         trajectories = defaultdict(list)
+        orientations = defaultdict(list)
 
         # object transform
         obj_pos = np.array(obj_state["position"][:2])
@@ -75,19 +76,22 @@ class RobotSlotPlanner:
 
         for i, r in enumerate(robots):
             slot_idx = new_delta_indicator[i]
-            goal_local, _ = self._slot_local(slot_idx)  # body frame slot 좌표
+            goal_local, local_ori = self._slot_local(slot_idx)  # body frame slot 좌표
 
             # world → body frame 변환
             start_body = R_T @ (np.array(r["position"][:2]) - obj_pos)
             goal_body = goal_local
             goal_world = obj_pos + R @ goal_local
+            goal_ori = (obj_ori + local_ori) % (2*np.pi)
 
             if (previous_delta_indicator[i] == new_delta_indicator[i]):
                 cont_path = [r["position"][:2]]  # 현재 위치
                 cont_path.append(goal_world)     # goal (slot)
+                ori_path = [self._yaw_from_matrix(r["rotation_matrix"]),goal_ori]
                 if len(cont_path) < self.horizon:
                     cont_path += [goal_world] * (self.horizon - len(cont_path))
                 trajectories[i] = cont_path
+                orientations[i] = ori_path
                 continue
 
             # body → grid (round 사용)
@@ -119,10 +123,22 @@ class RobotSlotPlanner:
             # horizon 맞추기
             if len(cont_path) < self.horizon:
                 cont_path += [true_goal_world] * (self.horizon - len(cont_path))
+            
+            start_ori = self._yaw_from_matrix(r["rotation_matrix"])
+            ori_path = self._interp_yaw(start_ori, goal_ori, len(cont_path))
 
             trajectories[i] = cont_path
+            orientations[i] = ori_path
 
-        return trajectories
+        return trajectories, orientations
+
+    def _yaw_from_matrix(self, rot_mat_flat):
+        R = np.array(rot_mat_flat).reshape(3,3)
+        return float(np.arctan2(R[1,0],R[0,0]))
+    
+    def _interp_yaw(self, start, goal, steps):
+        diff = (goal - start + np.pi) % (2*np.pi) - np.pi
+        return [(start + diff*(k/(steps-1))) % (2*np.pi) for k in range(steps)]
 
     # -------------------------------
     # Step 3: Trajectory Smoothing (start/goal 보존)
@@ -236,6 +252,10 @@ class RobotSlotPlanner:
     # -------------------------------
     def compute(self, robots, obj_state, delta, previous_delta_indicator):
         new_delta_indicator = self.assign_slots(robots, obj_state, delta)
-        raw_paths = self.plan_paths(robots, obj_state, new_delta_indicator, previous_delta_indicator)
+        raw_paths, raw_oris = self.plan_paths(robots, obj_state, new_delta_indicator, previous_delta_indicator)
         smooth_paths = self.smooth_paths(raw_paths)
-        return new_delta_indicator, smooth_paths
+        ext_trajs = {
+            "positions": smooth_paths,
+            "orientations": raw_oris
+        }
+        return new_delta_indicator, ext_trajs

@@ -103,11 +103,12 @@ class RobotCtrller:
         if ext_trajs is not None:
             self.ext_trajs = ext_trajs
             self.ext_traj_idx = 0
+            self.robot_id = 0
 
         if self.ext_trajs is not None:
             # Use current external trajectory
-            pos_ds = np.array(self.ext_trajs["positions"][self.ext_traj_idx])
-            ori_ds = np.array(self.ext_trajs["orientations"][self.ext_traj_idx])
+            pos_ds = np.array([self.ext_trajs["positions"][i][self.ext_traj_idx] for i in range(self.num_robots)])
+            ori_ds = np.array([self.ext_trajs["orientations"][i][self.ext_traj_idx] for i in range(self.num_robots)])
 
             self.ext_traj_idx += 1
             if self.ext_traj_idx >= len(self.ext_trajs):

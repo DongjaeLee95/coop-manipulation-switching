@@ -22,7 +22,7 @@ class SimulationLogger:
             "robot_inertias": [env.get_inertia(r) for r in env.robots]
         }
 
-    def log_step(self, time, state, actions, V_lyap):
+    def log_step(self, time, state, actions, switching_data):
         u = actions.get("u", None)
         ctrl_mode = actions.get("ctrl_mode", None)
         
@@ -35,12 +35,18 @@ class SimulationLogger:
                     "force_x": actions["forces_x"][i],
                     "force_y": actions["forces_y"][i],
                     "torque": actions["torques"][i],
-                    "u": float(u[i]) if u is not None else None
+                    "u": float(actions["u"][i]) if u is not None else None
                 }
                 for i in range(len(state["robots"]))
             ],
             "ctrl_mode": ctrl_mode,  # Can be str or int
-            "V_lyap": V_lyap
+            "switching": {
+                "V_lyap": switching_data["V_lyap"],
+                "delta": switching_data["delta"],
+                "trigger": switching_data["trigger"],
+                "MILP_compt_time": switching_data["MILP_compt_time"],
+                "MILP_rho": switching_data["MILP_rho"]
+            }
         }
         self.data["steps"].append(step_data)
 
