@@ -41,7 +41,8 @@ def main_QS():
     print("len(ts):",len(ts))
     q = np.zeros((qdim, len(ts)))
 
-    q_d = 0.1 * np.diag([1, 1, -1]) @ np.ones((qdim, len(ts)))
+    # q_d = 0.1 * np.diag([1, 1, -1]) @ np.ones((qdim, len(ts)))
+    q_d = np.diag([0, 0, np.deg2rad(30)]) @ np.ones((qdim, len(ts)))
     qdot_d = np.zeros((qdim, len(ts)))
 
     delta_init = np.zeros((udim,))

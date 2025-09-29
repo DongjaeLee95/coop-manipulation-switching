@@ -71,59 +71,54 @@ class RobotSlotPlanner:
         obj_rot = np.array(obj_state["rotation_matrix"]).reshape(3, 3)
         obj_ori = float(np.arctan2(obj_rot[1, 0], obj_rot[0, 0]))
         R = np.array([[np.cos(obj_ori), -np.sin(obj_ori)],
-                    [np.sin(obj_ori),  np.cos(obj_ori)]])   # world <- body
-        R_T = R.T                                           # body <- world
+                      [np.sin(obj_ori),  np.cos(obj_ori)]])
+        R_T = R.T
 
         for i, r in enumerate(robots):
             slot_idx = new_delta_indicator[i]
-            goal_local, local_ori = self._slot_local(slot_idx)  # body frame slot 좌표
+            goal_local, local_ori = self._slot_local(slot_idx)
 
-            # world → body frame 변환
             start_body = R_T @ (np.array(r["position"][:2]) - obj_pos)
             goal_body = goal_local
             goal_world = obj_pos + R @ goal_local
             goal_ori = (obj_ori + local_ori) % (2*np.pi)
 
-            if (previous_delta_indicator[i] == new_delta_indicator[i]):
-                cont_path = [r["position"][:2]]  # 현재 위치
-                cont_path.append(goal_world)     # goal (slot)
-                ori_path = [self._yaw_from_matrix(r["rotation_matrix"]),goal_ori]
-                if len(cont_path) < self.horizon:
-                    cont_path += [goal_world] * (self.horizon - len(cont_path))
+            # 같은 슬롯이면 직선 + 회전 보간만
+            if previous_delta_indicator[i] == new_delta_indicator[i]:
+                cont_path = [np.array(r["position"][:2]), goal_world]
+                start_ori = self._yaw_from_matrix(r["rotation_matrix"])
+                ori_path = self._interp_yaw(start_ori, goal_ori, len(cont_path))
                 trajectories[i] = cont_path
                 orientations[i] = ori_path
                 continue
 
-            # body → grid (round 사용)
+            # A* path
             start = self._to_grid(start_body)
             goal = self._to_grid(goal_body)
+            path, _ = self._a_star_with_reservation(start, goal, reservation)
 
-            # A* with reservation (body frame)
-            path, true_goal = self._a_star_with_reservation(start, goal, reservation)
+            safety_horizon = 1  # 지나간 뒤에도 몇 step 동안 유지할지
 
-            # reservation 기록
             for t, p in enumerate(path):
-                reservation[(p[0], p[1], t)] = i
+                for k in range(safety_horizon):
+                    reservation[(p[0], p[1], t+k)] = i   # vertex 점유 연장
+                if t > 0:
+                    prev = path[t-1]
+                    for k in range(safety_horizon):
+                        reservation[(prev[0],prev[1],p[0],p[1],t+k)] = i  # edge 점유 연장
 
             # body → world 변환
             cont_path = []
             for idx, p in enumerate(path):
                 if idx == 0:
                     world_xy = obj_pos + R @ start_body
-                    cont_path.append(world_xy)
-                if idx > 0:
+                else:
                     body_xy = self._to_continuous(p)
                     world_xy = obj_pos + R @ body_xy
-                    cont_path.append(world_xy)
+                cont_path.append(world_xy)
+            cont_path.append(goal_world)
 
-            # true goal append
-            true_goal_world = obj_pos + R @ goal_local
-            cont_path.append(true_goal_world)
-
-            # horizon 맞추기
-            if len(cont_path) < self.horizon:
-                cont_path += [true_goal_world] * (self.horizon - len(cont_path))
-            
+            # orientation 보간
             start_ori = self._yaw_from_matrix(r["rotation_matrix"])
             ori_path = self._interp_yaw(start_ori, goal_ori, len(cont_path))
 
@@ -140,32 +135,81 @@ class RobotSlotPlanner:
         diff = (goal - start + np.pi) % (2*np.pi) - np.pi
         return [(start + diff*(k/(steps-1))) % (2*np.pi) for k in range(steps)]
 
+
     # -------------------------------
-    # Step 3: Trajectory Smoothing (start/goal 보존)
+    # Step 3: Trajectory Smoothing + Resampling (start/goal 보존)
     # -------------------------------
-    def smooth_paths(self, trajectories):
-        smoothed = {}
+    def smooth_paths(self, trajectories, orientations):
+        smoothed_pos = {}
+        smoothed_ori = {}
+        resample_factor = 30
+
+        # 먼저 각 로봇 경로 smoothing+resample
+        temp_pos, temp_ori = {}, {}
+
         for rid, path in trajectories.items():
-            if len(path) < 3:
-                smoothed[rid] = path
-                continue
+            path = np.array(path)
+            ori_path = np.array(orientations[rid])
 
-            new_path = [path[0]]  # 시작점 보존
-            for i in range(1, len(path)-1):
-                prev, curr, nxt = path[i-1], path[i], path[i+1]
-                smoothed_pt = (prev + curr + nxt) / 3.0
-                new_path.append(smoothed_pt)
-            new_path.append(path[-1])  # true goal 보존
+            # --- 간단 smoothing ---
+            if len(path) > 2:
+                new_path = [path[0]]
+                new_ori = [ori_path[0]]
+                for i in range(1, len(path)-1):
+                    smoothed_pt = (path[i-1] + path[i] + path[i+1]) / 3.0
+                    new_path.append(smoothed_pt)
+                    smoothed_ori_val = (ori_path[i-1] + ori_path[i] + ori_path[i+1]) / 3.0
+                    new_ori.append(smoothed_ori_val % (2*np.pi))
+                new_path.append(path[-1])
+                new_ori.append(ori_path[-1])
+            else:
+                new_path, new_ori = path, ori_path
 
-            smoothed[rid] = new_path
-        return smoothed
-    
-    def _remove_duplicates(self, path):
-        unique_path = [path[0]]
-        for p in path[1:]:
-            if not np.allclose(p, unique_path[-1]):  # 연속 중복 제거
-                unique_path.append(p)
-        return np.array(unique_path)
+            new_path = np.array(new_path)
+            new_ori = np.array(new_ori)
+
+            # --- Resampling (pos + ori 같은 길이) ---
+            num_points = len(new_path)
+            new_num_points = (num_points - 1) * resample_factor + 1
+            t_old = np.linspace(0, 1, num_points)
+            t_new = np.linspace(0, 1, new_num_points)
+
+            # position resample
+            resampled_pos = np.zeros((new_num_points, 2))
+            resampled_pos[:, 0] = np.interp(t_new, t_old, new_path[:, 0])
+            resampled_pos[:, 1] = np.interp(t_new, t_old, new_path[:, 1])
+
+            # orientation resample
+            resampled_ori = []
+            for j in range(len(new_ori) - 1):
+                start = new_ori[j]
+                goal = new_ori[j + 1]
+                diff = (goal - start + np.pi) % (2*np.pi) - np.pi
+                segment = [(start + diff * (k / resample_factor)) % (2*np.pi)
+                           for k in range(resample_factor)]
+                resampled_ori.extend(segment)
+            resampled_ori.append(new_ori[-1])
+            resampled_ori = np.array(resampled_ori)
+
+            temp_pos[rid] = resampled_pos
+            temp_ori[rid] = resampled_ori
+
+        # --- 모든 로봇 경로 길이 통일 ---
+        max_len = max(len(p) for p in temp_pos.values())
+        for rid in temp_pos:
+            pos = temp_pos[rid]
+            ori = temp_ori[rid]
+            if len(pos) < max_len:
+                # 마지막 점을 복제해서 길이 맞추기
+                pad_pos = np.vstack([pos, np.tile(pos[-1], (max_len - len(pos), 1))])
+                pad_ori = np.concatenate([ori, np.tile(ori[-1], max_len - len(ori))])
+            else:
+                pad_pos, pad_ori = pos, ori
+
+            smoothed_pos[rid] = pad_pos
+            smoothed_ori[rid] = pad_ori
+
+        return smoothed_pos, smoothed_ori
 
     # -------------------------------
     # Helpers
@@ -205,7 +249,7 @@ class RobotSlotPlanner:
     def _to_continuous(self, cell):
         return np.array([cell[0]*self.cell_size, cell[1]*self.cell_size])
 
-    def _a_star_with_reservation(self, start, goal, reservation):
+    def _a_star_with_reservation(self, start, goal, reservation, agent_id=None):
         # --- target object blocked region (inflate with r) ---
         blocked = set()
         half = int((2*self.L + self.r) / self.cell_size)
@@ -239,13 +283,23 @@ class RobotSlotPlanner:
             visited.add((current,g))
 
             for nx,ny in self._neighbors(current):
-                if (nx,ny) in blocked: continue
-                if (nx,ny,g+1) in reservation: continue
+                if (nx,ny) in blocked: 
+                    continue
+
+                # --- vertex conflict ---
+                if (nx,ny,g+1) in reservation:
+                    continue
+
+                # --- edge conflict (swap 방지) ---
+                if (current[0],current[1],nx,ny,g+1) in reservation:
+                    continue
+
                 new_path = path+[(nx,ny)]
                 cost = g+1+self._heuristic((nx,ny),goal)
                 heapq.heappush(open_set,(cost,g+1,(nx,ny),new_path))
 
         return path, true_goal
+
 
     # -------------------------------
     # Main API
@@ -253,9 +307,9 @@ class RobotSlotPlanner:
     def compute(self, robots, obj_state, delta, previous_delta_indicator):
         new_delta_indicator = self.assign_slots(robots, obj_state, delta)
         raw_paths, raw_oris = self.plan_paths(robots, obj_state, new_delta_indicator, previous_delta_indicator)
-        smooth_paths = self.smooth_paths(raw_paths)
+        smooth_paths, smoothed_ori = self.smooth_paths(raw_paths, raw_oris)
         ext_trajs = {
             "positions": smooth_paths,
-            "orientations": raw_oris
+            "orientations": smoothed_ori
         }
         return new_delta_indicator, ext_trajs

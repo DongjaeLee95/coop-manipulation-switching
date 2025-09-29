@@ -15,14 +15,12 @@ class SimulationLogger:
     def log_environment(self, env):
         self.data["environment"] = {
             "gravity": env.gravity,
-            "friction": env.friction,
-            "target_mass": env.get_mass(env.target_box),
-            "target_inertia": env.get_inertia(env.target_box),
-            "robot_masses": [env.get_mass(r) for r in env.robots],
-            "robot_inertias": [env.get_inertia(r) for r in env.robots]
+            "friction": env.mu,
+            "target_mass": env.mass_target,
+            "target_inertia": env.inertia_target
         }
 
-    def log_step(self, time, state, actions, switching_data):
+    def log_step(self, time, state, actions, switching_data, ext_trajs):
         u = actions.get("u", None)
         ctrl_mode = actions.get("ctrl_mode", None)
         
@@ -32,9 +30,9 @@ class SimulationLogger:
             "target": state["target"],
             "actions": [
                 {
-                    "force_x": actions["forces_x"][i],
-                    "force_y": actions["forces_y"][i],
-                    "torque": actions["torques"][i],
+                    "vx": actions["vx"][i],
+                    "vy": actions["vy"][i],
+                    "omega": actions["omega"][i],
                     "u": float(actions["u"][i]) if u is not None else None
                 }
                 for i in range(len(state["robots"]))
@@ -46,7 +44,8 @@ class SimulationLogger:
                 "trigger": switching_data["trigger"],
                 "MILP_compt_time": switching_data["MILP_compt_time"],
                 "MILP_rho": switching_data["MILP_rho"]
-            }
+            },
+            "ext_trajs": ext_trajs
         }
         self.data["steps"].append(step_data)
 

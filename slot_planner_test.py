@@ -35,20 +35,22 @@ def main():
     # -------------------------------
     # 3. 로봇 초기 위치 = 특정 슬롯
     # -------------------------------
-    previous_delta_indicator = [0,2]   # 로봇들이 처음 붙어 있는 슬롯 번호
+    previous_delta_indicator = [0,1]   # 로봇들이 처음 붙어 있는 슬롯 번호
     robots = []
     for s in previous_delta_indicator:
         local_pos, _ = planner._slot_local(s)
         world_pos = obj_pos + R @ local_pos
-        robots.append({"position": np.array([world_pos[0], world_pos[1], 0.0])})
+        robots.append({"position": np.array([world_pos[0], world_pos[1], 0.0]),
+                       "rotation_matrix": np.eye(3).flatten()
+                       })
 
     # -------------------------------
     # 4. delta 설정 (새로운 목표 슬롯 집합)
     # -------------------------------
     # 예: slot 1, 3, 5번 활성화
     delta = [0 for _ in range(8)]
-    delta[2] = 1
-    delta[4] = 1
+    delta[6] = 1
+    delta[7] = 1
     # delta[2] = 1
 
     # -------------------------------
@@ -74,7 +76,7 @@ def main():
 
     # 로봇 궤적
     colors = ["r", "g", "b", "c", "m", "y"]
-    for i, traj in trajectories.items():
+    for i, traj in trajectories["positions"].items():
         traj = np.array(traj)
         ax.plot(traj[:,0], traj[:,1], color=colors[i%len(colors)], label=f"Robot {i}")
         ax.scatter(traj[0,0], traj[0,1], color=colors[i%len(colors)], marker="o")  # start
