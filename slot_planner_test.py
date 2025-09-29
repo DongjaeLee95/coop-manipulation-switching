@@ -25,7 +25,7 @@ def main():
     }
 
     obj_pos = np.array(obj_state["position"][:2])
-    psi = np.deg2rad(60)
+    psi = np.deg2rad(0)
     R = np.array([[np.cos(psi), -np.sin(psi)],
               [np.sin(psi),  np.cos(psi)]])
     R3 = np.eye(3)
@@ -35,7 +35,7 @@ def main():
     # -------------------------------
     # 3. 로봇 초기 위치 = 특정 슬롯
     # -------------------------------
-    previous_delta_indicator = [0,1]   # 로봇들이 처음 붙어 있는 슬롯 번호
+    previous_delta_indicator = [7,6]   # 로봇들이 처음 붙어 있는 슬롯 번호
     robots = []
     for s in previous_delta_indicator:
         local_pos, _ = planner._slot_local(s)
@@ -49,8 +49,8 @@ def main():
     # -------------------------------
     # 예: slot 1, 3, 5번 활성화
     delta = [0 for _ in range(8)]
-    delta[6] = 1
-    delta[7] = 1
+    delta[4] = 1
+    delta[5] = 1
     # delta[2] = 1
 
     # -------------------------------

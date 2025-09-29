@@ -18,7 +18,7 @@ class RobotSlotPlanner:
         # Planner parameters
         # -------------------------------
         horizon = 30
-        grid_size = (10,10)
+        grid_size = (30,30)
         cell_size = 2*self.r
         self.grid_size = grid_size    # grid 범위 (셀 개수, 예: 100x100)
         self.horizon = horizon        # planning horizon
@@ -71,9 +71,13 @@ class RobotSlotPlanner:
         obj_rot = np.array(obj_state["rotation_matrix"]).reshape(3, 3)
         obj_ori = float(np.arctan2(obj_rot[1, 0], obj_rot[0, 0]))
         R = np.array([[np.cos(obj_ori), -np.sin(obj_ori)],
-                      [np.sin(obj_ori),  np.cos(obj_ori)]])
+                    [np.sin(obj_ori),  np.cos(obj_ori)]])
         R_T = R.T
 
+        # -------------------------------
+        # 로봇별 목표까지 거리 계산
+        # -------------------------------
+        robot_infos = []
         for i, r in enumerate(robots):
             slot_idx = new_delta_indicator[i]
             goal_local, local_ori = self._slot_local(slot_idx)
@@ -82,6 +86,35 @@ class RobotSlotPlanner:
             goal_body = goal_local
             goal_world = obj_pos + R @ goal_local
             goal_ori = (obj_ori + local_ori) % (2*np.pi)
+
+            dist = np.linalg.norm(start_body - goal_body)
+
+            robot_infos.append({
+                "id": i,
+                "robot": r,
+                "start_body": start_body,
+                "goal_body": goal_body,
+                "goal_world": goal_world,
+                "goal_ori": goal_ori,
+                "slot_idx": slot_idx,
+                "dist": dist
+            })
+
+        # -------------------------------
+        # 거리 기준으로 우선순위 정렬
+        # -------------------------------
+        robot_infos.sort(key=lambda x: x["dist"])  # 가까운 로봇부터
+
+        # -------------------------------
+        # 경로 계획
+        # -------------------------------
+        for info in robot_infos:
+            i = info["id"]
+            r = info["robot"]
+            start_body = info["start_body"]
+            goal_body = info["goal_body"]
+            goal_world = info["goal_world"]
+            goal_ori = info["goal_ori"]
 
             # 같은 슬롯이면 직선 + 회전 보간만
             if previous_delta_indicator[i] == new_delta_indicator[i]:
@@ -97,15 +130,23 @@ class RobotSlotPlanner:
             goal = self._to_grid(goal_body)
             path, _ = self._a_star_with_reservation(start, goal, reservation)
 
-            safety_horizon = 1  # 지나간 뒤에도 몇 step 동안 유지할지
+            safety_horizon = int(self.horizon/2)  # 지나간 뒤에도 몇 step 동안 유지
 
             for t, p in enumerate(path):
-                for k in range(safety_horizon):
-                    reservation[(p[0], p[1], t+k)] = i   # vertex 점유 연장
+                # 상하좌우 포함한 vertex 점유
+                # for dx, dy in [(0,0),(1,0),(-1,0),(0,1),(0,-1)]:
+                for dx, dy in [(0,0)]:
+                    for k in range(safety_horizon):
+                        reservation[(p[0]+dx, p[1]+dy, t+k)] = i
+
                 if t > 0:
                     prev = path[t-1]
-                    for k in range(safety_horizon):
-                        reservation[(prev[0],prev[1],p[0],p[1],t+k)] = i  # edge 점유 연장
+                    # edge 점유도 상하좌우 확장
+                    # for dx, dy in [(0,0),(1,0),(-1,0),(0,1),(0,-1)]:
+                    for dx, dy in [(0,0)]:
+                        for k in range(safety_horizon):
+                            reservation[(prev[0]+dx, prev[1]+dy,
+                                        p[0]+dx, p[1]+dy, t+k)] = i
 
             # body → world 변환
             cont_path = []
@@ -126,6 +167,7 @@ class RobotSlotPlanner:
             orientations[i] = ori_path
 
         return trajectories, orientations
+
 
     def _yaw_from_matrix(self, rot_mat_flat):
         R = np.array(rot_mat_flat).reshape(3,3)

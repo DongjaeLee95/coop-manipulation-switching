@@ -43,7 +43,7 @@ def main():
     # -------------------------------
     # try:
     t = 0.0
-    tf = 10.0
+    tf = 15.0
 
     # initialize delta's
     delta_indicator = np.array(env.robot_init_id)
@@ -53,7 +53,7 @@ def main():
 
     # desired target pose
     # obj_d = np.array([0, 0, np.deg2rad(90), 0.0, 0.0, 0.0])
-    obj_d = np.array([0.1, 0.1, np.deg2rad(0), 0.0, 0.0, 0.0])
+    obj_d = np.array([1, 1, np.deg2rad(30), 0.0, 0.0, 0.0])
     switch_trigger = False
 
     while True:

@@ -14,8 +14,8 @@ mass:
   robot: 0.5
 
 robot:
-  num: 3
-  init_id: [0,2,3]
+  num: 2
+  init_id: [0,1]
   shape: cylinder
   radius: 0.1
   height: 0.1
