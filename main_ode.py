@@ -43,7 +43,7 @@ def main():
     # -------------------------------
     # try:
     t = 0.0
-    tf = 12.0
+    tf = 20.0
 
     delta_indicator = np.array(env.robot_init_id)
     delta = np.zeros(8)
@@ -107,7 +107,8 @@ def main():
                 "MILP_compt_time": compt_time,
                 "MILP_rho": rho
             },
-            ext_trajs
+            ext_trajs,
+            obj_d
         )
         print("t: ", t)
         t += dt

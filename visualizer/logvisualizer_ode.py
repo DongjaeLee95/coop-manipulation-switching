@@ -39,6 +39,10 @@ class LogVisualizer:
 
         self.ext_trajs = []
 
+        self.obj_d_pos_x = []
+        self.obj_d_pos_y = []
+        self.obj_d_yaw = []
+
         self._extract_data()
 
     def show(self):
@@ -87,6 +91,11 @@ class LogVisualizer:
             # external trajectory
             self.ext_trajs.append(step.get("ext_trajs", None))
 
+            # desired object pose
+            self.obj_d_pos_x.append(step["obj_d"][0])
+            self.obj_d_pos_y.append(step["obj_d"][1])
+            self.obj_d_yaw.append(step["obj_d"][2])
+
         self.u_matrix = np.array(self.u_matrix)
         self.ctrl_modes = np.array(self.ctrl_modes)
         self.delta = np.array(self.delta)
@@ -100,10 +109,15 @@ class LogVisualizer:
 
         self.MILP_compt_time = np.array(self.MILP_compt_time)
         self.MILP_rho = np.array(self.MILP_rho)
+        self.obj_d_pos_x = np.array(self.obj_d_pos_x)
+        self.obj_d_pos_y = np.array(self.obj_d_pos_y)
+        self.obj_d_yaw = np.array(self.obj_d_yaw)
 
     def plot_target_box(self):
         fig, axs = plt.subplots(2, 3, figsize=(15, 6))
         axs = axs.flatten()
+        for ax in axs:
+            ax.grid(True)
 
         axs[0].plot(self.time, self.target_pos_x); axs[0].set_title("Target Position X [m]")
         axs[0].set_xlim(self.time[0], self.time[-1])
@@ -140,6 +154,8 @@ class LogVisualizer:
 
         fig, axs = plt.subplots(num_rows, num_cols, figsize=(12, 3 * num_rows), sharex=True)
         axs = axs.flatten()
+        for ax in axs:
+            ax.grid(True)
 
         for i in range(self.num_robots):
             axs[i].plot(time, u_robot_mat[:, i], label=f"Robot {i} force u")
@@ -182,11 +198,15 @@ class LogVisualizer:
         colors = ["r", "g", "b", "c", "m", "y"]
 
         fig, ax = plt.subplots(figsize=(8, 8))
+        ax.grid(True)
         ax.set_aspect("equal")
-        ax.set_xlim(min(self.robots_x.min(), self.target_pos_x.min()) - 1,
-                    max(self.robots_x.max(), self.target_pos_x.max()) + 1)
-        ax.set_ylim(min(self.robots_y.min(), self.target_pos_y.min()) - 1,
-                    max(self.robots_y.max(), self.target_pos_y.max()) + 1)
+        ax.set_xlim(min(self.robots_x.min(), self.target_pos_x.min()) - 0.5,
+                    max(self.robots_x.max(), self.target_pos_x.max()) + 0.5)
+        ax.set_ylim(min(self.robots_y.min(), self.target_pos_y.min()) - 0.5,
+                    max(self.robots_y.max(), self.target_pos_y.max()) + 0.5)
+        tick_fontsize = 16
+        ax.tick_params(axis='x', labelsize=tick_fontsize)
+        ax.tick_params(axis='y', labelsize=tick_fontsize)
 
         # robots (circle + heading)
         robot_circles = [plt.Circle((0, 0), robot_radius, fc="blue", alpha=0.5) for _ in range(self.num_robots)]
@@ -196,8 +216,24 @@ class LogVisualizer:
 
         # target (rectangle)
         target_rect = plt.Rectangle((-target_size, -target_size), 2*target_size, 2*target_size,
-                            fc="red", alpha=0.3)
+                            fc="black", alpha=0.3)
         ax.add_patch(target_rect)
+
+        # target orientation
+        target_x_axis, = ax.plot([],[], "r-", linewidth=2.5, label="Target x-axis")
+        target_y_axis, = ax.plot([],[], "b-", linewidth=2.5, label="Target y-axis")
+
+        # desired target
+        # desired_rect = plt.Rectangle((-target_size, -target_size), 2*target_size, 2*target_size,
+        #                     fc="none", ec="k", linestyle="--", alpha=0.6)
+        # ax.add_patch(desired_rect)
+        desired_circle = plt.Circle((0,0), robot_radius/2, 
+                                fc='k', linestyle=':', linewidth=1.5, alpha=0.7)
+        ax.add_patch(desired_circle) 
+
+        desired_x_axis, = ax.plot([],[], "r--", linewidth=2.0, label="Desired x-axis")
+        desired_y_axis, = ax.plot([],[], "b--", linewidth=2.0, label="Desired y-axis")
+
 
         # ext_trajs (라인, 시작점, 목표점)
         traj_lines = [ax.plot([], [], linestyle="--", color=colors[i % len(colors)])[0]
@@ -207,7 +243,7 @@ class LogVisualizer:
         traj_goals = [ax.scatter([], [], color=colors[i % len(colors)], marker="x")
                     for i in range(self.num_robots)]
 
-        time_text = ax.text(0.02, 0.95, "", transform=ax.transAxes)
+        time_text = ax.text(0.02, 0.95, "", transform=ax.transAxes, fontsize=18)
 
         def init():
             for c in robot_circles:
@@ -238,6 +274,30 @@ class LogVisualizer:
             transf = transforms.Affine2D().rotate(tyaw).translate(tx, ty) + ax.transData
             target_rect.set_transform(transf)
 
+            # draw body frame axes for current target
+            axis_len = target_size*0.6
+            R = np.array([[np.cos(tyaw), -np.sin(tyaw)],
+                         [np.sin(tyaw), np.cos(tyaw)]])
+            x_axis = np.array([tx,ty]) + R @ np.array([axis_len,0])
+            y_axis = np.array([tx,ty]) + R @ np.array([0,axis_len])
+            target_x_axis.set_data([tx, x_axis[0]], [ty, x_axis[1]])
+            target_y_axis.set_data([tx, y_axis[0]], [ty, y_axis[1]])
+
+            # desired target
+            dx = self.obj_d_pos_x[frame]
+            dy = self.obj_d_pos_y[frame]
+            dyaw = self.obj_d_yaw[frame]
+            desired_circle.set_center((dx,dy))
+            # dtransf = transforms.Affine2D().rotate(dyaw).translate(dx,dy) + ax.transData
+            # desired_rect.set_transform(dtransf)
+
+            R_d = np.array([[np.cos(dyaw), -np.sin(dyaw)],
+                         [np.sin(dyaw), np.cos(dyaw)]])
+            dx_axis = np.array([dx,dy]) + R_d @ np.array([axis_len,0])
+            dy_axis = np.array([dx,dy]) + R_d @ np.array([0,axis_len])
+            desired_x_axis.set_data([dx, dx_axis[0]], [dy, dx_axis[1]])
+            desired_y_axis.set_data([dx, dy_axis[0]], [dy, dy_axis[1]])
+
             # ext_trajs (ctrl_mode == NAV일 때만)
             if self.ctrl_modes[frame] == 1:  # NAV
                 recent_ext = None
@@ -258,12 +318,19 @@ class LogVisualizer:
                     s.set_offsets(np.empty((0, 2)))
 
             time_text.set_text(f"t = {self.time[frame]:.2f}s")
-            return robot_circles + robot_headings + [target_rect, time_text] + traj_lines + traj_starts + traj_goals
+            return robot_circles + robot_headings + [target_rect, time_text,
+                                                    target_x_axis, target_y_axis,
+                                                    desired_circle, desired_x_axis, desired_y_axis] \
+                                 + traj_lines + traj_starts + traj_goals
+            # return robot_circles + robot_headings + [target_rect, time_text,
+            #                                         target_x_axis, target_y_axis,
+            #                                         desired_rect, desired_x_axis, desired_y_axis] \
+            #                      + traj_lines + traj_starts + traj_goals
 
         ani = animation.FuncAnimation(fig, update, 
                                       frames=range(0, len(self.time), frame_step),
                                       init_func=init, blit=True, interval=interval)
-        ax.legend(["Robot heading", "Target"])
+        # ax.legend(["Robot heading", "Target"])
 
         fps = int(1.0/(dt * frame_step))
          # Save if path is given
@@ -280,6 +347,8 @@ class LogVisualizer:
     def plot_switching_data(self):
         fig, axs = plt.subplots(3, 2, figsize=(12, 8))
         axs = axs.flatten()
+        for ax in axs:
+            ax.grid(True)
 
         axs[0].plot(self.time, self.V_lyap); axs[0].set_title("Lyapunov Function V")
         axs[0].set_xlim(self.time[0], self.time[-1])

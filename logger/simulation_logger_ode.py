@@ -20,7 +20,7 @@ class SimulationLogger:
             "target_inertia": env.inertia_target
         }
 
-    def log_step(self, time, state, actions, u, switching_data, ext_trajs):
+    def log_step(self, time, state, actions, u, switching_data, ext_trajs, obj_d):
         ctrl_mode = actions.get("ctrl_mode", None)
         
         step_data = {
@@ -45,7 +45,8 @@ class SimulationLogger:
                 "MILP_compt_time": switching_data["MILP_compt_time"],
                 "MILP_rho": switching_data["MILP_rho"]
             },
-            "ext_trajs": ext_trajs
+            "ext_trajs": ext_trajs,
+            "obj_d": obj_d
         }
         self.data["steps"].append(step_data)
 
