@@ -43,17 +43,16 @@ def main():
     # -------------------------------
     # try:
     t = 0.0
-    tf = 15.0
+    tf = 10.0
 
-    # initialize delta's
     delta_indicator = np.array(env.robot_init_id)
     delta = np.zeros(8)
     for i in delta_indicator:
         delta[i] = 1
 
     # desired target pose
-    # obj_d = np.array([0, 0, np.deg2rad(90), 0.0, 0.0, 0.0])
-    obj_d = np.array([1, 1, np.deg2rad(30), 0.0, 0.0, 0.0])
+    obj_d = np.array([0, 0, np.deg2rad(90), 0.0, 0.0, 0.0])
+    # obj_d = np.array([1, 1, np.deg2rad(30), 0.0, 0.0, 0.0])
     switch_trigger = False
 
     while True:
@@ -61,16 +60,11 @@ def main():
             break
         state = env.get_state()
 
-        # switch_trigger = False
-        # compt_time = np.nan
-        # rho = np.nan
         # TODO - MILP가 solution이 없다는데.. 말이안되는데? -- 뭔가 버그다, 90도 돌때 안되는데 matlab에서는 됨
         _, delta, switch_trigger, compt_time, rho = switching_law.compute(state["target"], obj_d, delta)
         u, _, V, _, _ = obj_ctrl.compute(state["target"], obj_d, delta)
         
-        # TODO - input bound가 잘 안지켜져 살짝 넘어서는데 이거 함수 불러오는 순서가 달라서 그런듯?
         if switch_trigger:
-            # TODO - 여기에서 경로는 잘 만드는데, 경로대로 안따라가네!
             delta_indicator, ext_trajs = slot_planner.compute(state["robots"], state["target"], 
                                                               delta, delta_indicator)
         else:
@@ -102,12 +96,13 @@ def main():
                 "vx": vx_s,
                 "vy": vy_s,
                 "omega": omegas,
-                "u": u,
                 "ctrl_mode": int(ctrl.mode)
             },
+            u,
             {
                 "V_lyap": V,
                 "delta": delta,
+                "delta_indicator": delta_indicator,
                 "trigger": switch_trigger,
                 "MILP_compt_time": compt_time,
                 "MILP_rho": rho

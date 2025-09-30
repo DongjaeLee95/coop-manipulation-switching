@@ -22,7 +22,7 @@ class ObjCtrller:
         with open(sim_config_path, "r") as f:
             self.sim_config = yaml.safe_load(f)
             self.param["L"] = (self.sim_config["target"]["size"][0])/2
-            self.param["m"] = 2*self.sim_config["mass"]["target"]
+            self.param["m"] = self.sim_config["mass"]["target"]
             self.param["mu"] = math.sqrt(self.sim_config["friction"]["plane"] * 
                                         self.sim_config["friction"]["target"])
             self.param["g"] = self.sim_config["gravity"]
@@ -60,25 +60,19 @@ class ObjCtrller:
         q_d = x_d[0:qdim].reshape(-1,1)
         qdot_d = x_d[qdim:].reshape(-1,1)
 
-        R = np.array([
-            [np.cos(psi), -np.sin(psi)],
-            [np.sin(psi),  np.cos(psi)]
-        ])
-        F = np.block([
-            [R, np.zeros((2, 1))],
-            [np.zeros((1, 2)), 1]
-        ])
-        M = np.block([
-            [self.param["c_f"] * np.eye(2), np.zeros((2, 1))],
-            [np.zeros((1, 2)), self.param["c_tau"]]
-        ])
+        R = np.array([[np.cos(psi), -np.sin(psi)],
+                      [np.sin(psi),  np.cos(psi)]])
+        F = np.block([[R, np.zeros((2, 1))],
+                      [np.zeros((1, 2)), 1]])
+        M = np.block([[self.param["c_f"] * np.eye(2), np.zeros((2, 1))],
+                      [np.zeros((1, 2)), self.param["c_tau"]]])
+        G = F @ np.linalg.inv(M)
 
         eq = q_d - q.reshape(-1, 1)
         tau = M @ (F.T @ (qdot_d + self.param["Kq"] @ eq))
         tau = tau.flatten()
 
         # --- QP controller (analytic solution) ---
-        G = F @ np.linalg.inv(M)
         delta_dim = len(delta)
         Bbar = self._findBbar(delta)
         c = 2 * np.min(np.diag(self.param["Kq"]))
@@ -87,7 +81,7 @@ class ObjCtrller:
         trigger_x = Bbar.T @ G.T @ eq
         trigger_y = -(c - self.param["V_decay"]) * V + eq.T @ G @ tau.reshape(-1, 1)
 
-        ubar = np.zeros(int(np.sum(delta)))
+        ubar = np.zeros(np.sum(delta, dtype=int))
         if trigger_y > 0:
             denominator = np.sum(np.maximum(0, trigger_x)**2)
             if denominator > 0:

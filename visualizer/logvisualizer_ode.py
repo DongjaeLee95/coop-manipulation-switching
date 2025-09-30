@@ -28,6 +28,7 @@ class LogVisualizer:
 
         self.V_lyap = []
         self.delta = []
+        self.delta_indicator = []
         self.trigger = []
         self.MILP_compt_time = []
         self.MILP_rho = []
@@ -54,6 +55,7 @@ class LogVisualizer:
             robots = step["robots"]
             target = step["target"]
             switching = step["switching"]
+            u = step["obj_actions"]
 
             # 로봇들 위치 저장
             self.robots_x.append([r["position"][0] for r in robots])
@@ -71,13 +73,13 @@ class LogVisualizer:
             # switching law-related
             self.V_lyap.append(switching["V_lyap"])
             self.delta.append(switching["delta"])
+            self.delta_indicator.append(switching["delta_indicator"])
             self.trigger.append(switching["trigger"])
             self.MILP_compt_time.append(switching["MILP_compt_time"])
             self.MILP_rho.append(switching["MILP_rho"])
 
             # Extract u for all robots in this step
-            u_values = [a.get("u", 0.0) for a in step["actions"]]
-            self.u_matrix.append(u_values)
+            self.u_matrix.append(u)
 
             # Controller mode
             self.ctrl_modes.append(step.get("ctrl_mode", 0))
@@ -87,6 +89,8 @@ class LogVisualizer:
 
         self.u_matrix = np.array(self.u_matrix)
         self.ctrl_modes = np.array(self.ctrl_modes)
+        self.delta = np.array(self.delta)
+        self.delta_indicator = np.array(self.delta_indicator)
         self.robots_x = np.array(self.robots_x)
         self.robots_y = np.array(self.robots_y)
         self.robots_yaw = np.array(self.robots_yaw)
@@ -94,13 +98,19 @@ class LogVisualizer:
         self.target_pos_y = np.array(self.target_pos_y)
         self.target_yaw = np.array(self.target_yaw)
 
+        self.MILP_compt_time = np.array(self.MILP_compt_time)
+        self.MILP_rho = np.array(self.MILP_rho)
+
     def plot_target_box(self):
         fig, axs = plt.subplots(2, 3, figsize=(15, 6))
         axs = axs.flatten()
 
         axs[0].plot(self.time, self.target_pos_x); axs[0].set_title("Target Position X [m]")
+        axs[0].set_xlim(self.time[0], self.time[-1])
         axs[1].plot(self.time, self.target_pos_y); axs[1].set_title("Target Position Y [m]")
+        axs[1].set_xlim(self.time[0], self.time[-1])
         axs[2].plot(self.time, np.degrees(self.target_yaw)); axs[2].set_title("Target Yaw Angle [deg]")
+        axs[2].set_xlim(self.time[0], self.time[-1])
 
         # axs[3].plot(self.time, self.target_vel_x); axs[3].set_title("Target Velocity X [m/s]")
         # axs[4].plot(self.time, self.target_vel_y); axs[4].set_title("Target Velocity Y [m/s]")
@@ -113,26 +123,31 @@ class LogVisualizer:
         plt.tight_layout()        
 
     def plot_u_with_mode(self):
-        if "u" not in self.data["steps"][0]["actions"][0]:
-            print("No 'u' data found in the logs. Skipping u plot.")
-            return
-
         time = self.time
-        u_matrix = self.u_matrix
+        u_matrix = self.u_matrix              # shape: (T, num_slots)
+        delta_ind = self.delta_indicator      # shape: (T, num_robots)
+
+        # 각 time-step에서 로봇별 힘 u를 뽑기
+        u_robot_mat = []
+        for j in range(len(time)):
+            u_robot_mat.append([u_matrix[j, delta_ind[j][i]] for i in range(self.num_robots)])
+        u_robot_mat = np.array(u_robot_mat)   # shape: (T, num_robots)
+
         ctrl_modes = self.ctrl_modes
 
         num_cols = 2
         num_rows = math.ceil(self.num_robots / num_cols)
 
         fig, axs = plt.subplots(num_rows, num_cols, figsize=(12, 3 * num_rows), sharex=True)
-        axs = axs.flatten()  # Make indexing uniform
+        axs = axs.flatten()
 
         for i in range(self.num_robots):
-            axs[i].plot(time, u_matrix[:, i], label=f"u_{i}")
+            axs[i].plot(time, u_robot_mat[:, i], label=f"Robot {i} force u")
             axs[i].set_ylabel(f"u_{i}")
+            axs[i].set_xlim(self.time[0], self.time[-1])
             axs[i].grid(True)
 
-            # Shade background where ctrl_mode == 1 (NAV)
+            # NAV 모드 shading
             in_nav = False
             start_t = 0
             for j in range(len(ctrl_modes)):
@@ -140,20 +155,19 @@ class LogVisualizer:
                     start_t = time[j]
                     in_nav = True
                 elif ctrl_modes[j] != 1 and in_nav:
-                    end_t = time[j]
-                    axs[i].axvspan(start_t, end_t, color='gray', alpha=0.3)
+                    axs[i].axvspan(start_t, time[j], color='gray', alpha=0.3)
                     in_nav = False
             if in_nav:
                 axs[i].axvspan(start_t, time[-1], color='gray', alpha=0.3)
 
             axs[i].legend()
 
-        # Hide any unused subplots if num_robots is odd
+        # 사용 안 한 subplot 숨기기
         for j in range(self.num_robots, len(axs)):
             fig.delaxes(axs[j])
 
         axs[-1].set_xlabel("Time [s]")
-        plt.suptitle("Control Inputs (u) with NAV Mode Highlighted")
+        plt.suptitle("Robot Control Forces (u) with NAV Mode Highlighted")
         plt.tight_layout(rect=[0, 0, 1, 0.97])
         
     # -------------------------------
@@ -268,10 +282,28 @@ class LogVisualizer:
         axs = axs.flatten()
 
         axs[0].plot(self.time, self.V_lyap); axs[0].set_title("Lyapunov Function V")
-        axs[1].plot(self.time, [np.sum(d) for d in self.delta]); axs[1].set_title("Delta (sum)")
+        axs[0].set_xlim(self.time[0], self.time[-1])
+        axs[1].plot(self.time, self.delta_indicator); axs[1].set_title("Delta")
+        axs[1].set_xlim(self.time[0], self.time[-1])
         axs[2].plot(self.time, self.trigger); axs[2].set_title("Switch Trigger")
-        axs[3].plot(self.time, self.MILP_compt_time); axs[3].set_title("MILP Computation Time [s]")
-        axs[4].plot(self.time, self.MILP_rho); axs[4].set_title("MILP rho")
+        axs[2].set_xlim(self.time[0], self.time[-1])
+        # MILP computation time
+        axs[3].plot(
+            self.time,
+            [np.nan if v is None else v for v in self.MILP_compt_time],
+            marker="o", linestyle="None"
+        )
+        axs[3].set_title("MILP Computation Time [s]")
+        axs[3].set_xlim(self.time[0], self.time[-1])
+
+        # MILP rho
+        axs[4].plot(
+            self.time,
+            [np.nan if v is None else v for v in self.MILP_rho],
+            marker="o", linestyle="None"
+        )
+        axs[4].set_title("MILP rho")
+        axs[4].set_xlim(self.time[0], self.time[-1])
 
         for ax in axs:
             ax.set_xlabel("Time [s]")

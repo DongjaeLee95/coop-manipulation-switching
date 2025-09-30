@@ -99,7 +99,7 @@ class SwitingLaw:
                 for i in range(len(ubar_new)):
                     ubar_new[i] = self.ReLU(trigger_x[i]) * trigger_y / denominator
 
-        if np.max(ubar_new) > self.param["uM"]:
+        if np.max(ubar_new) >= self.param["uM"]:
             trigger_cond = True
 
         # --- Optimization step ---
