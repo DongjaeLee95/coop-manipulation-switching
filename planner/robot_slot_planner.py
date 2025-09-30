@@ -123,6 +123,32 @@ class RobotSlotPlanner:
                 ori_path = self._interp_yaw(start_ori, goal_ori, len(cont_path))
                 trajectories[i] = cont_path
                 orientations[i] = ori_path
+
+                safety_horizon = int(self.horizon/2)
+                start_grid = self._to_grid(start_body)
+                goal_grid = self._to_grid(goal_body)
+
+                # 단순한 직선 보간으로 grid path 생성
+                line_path = [(
+                    int(round(start_grid[0] + (goal_grid[0]-start_grid[0]) * t/10)),
+                    int(round(start_grid[1] + (goal_grid[1]-start_grid[1]) * t/10))
+                ) for t in range(11)]
+
+                for t, p in enumerate(line_path):
+                    # for dx, dy in [(0,0)]:
+                    for dx, dy in [(0,0),(1,0),(-1,0),(0,1),(0,-1)]:
+                        for k in range(safety_horizon):
+                            reservation[(p[0]+dx, p[1]+dy, t+k)] = i
+                    if t > 0:
+                        prev = line_path[t-1]
+                        # for dx, dy in [(0,0)]:
+                        for dx, dy in [(0,0),(1,0),(-1,0),(0,1),(0,-1)]:
+                            for k in range(safety_horizon):
+                                reservation[(prev[0]+dx, prev[1]+dy,
+                                            p[0]+dx, p[1]+dy, t+k)] = i
+                
+                for k in range(safety_horizon):
+                    reservation[(goal_grid[0], goal_grid[1], len(line_path)+k)] = i
                 continue
 
             # A* path
@@ -130,7 +156,8 @@ class RobotSlotPlanner:
             goal = self._to_grid(goal_body)
             path, _ = self._a_star_with_reservation(start, goal, reservation)
 
-            safety_horizon = int(self.horizon/2)  # 지나간 뒤에도 몇 step 동안 유지
+            # safety_horizon = int(self.horizon/2)  # 지나간 뒤에도 몇 step 동안 유지
+            safety_horizon = self.horizon
 
             for t, p in enumerate(path):
                 # 상하좌우 포함한 vertex 점유
