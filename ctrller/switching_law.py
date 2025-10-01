@@ -21,8 +21,10 @@ class SwitingLaw:
             self.sim_config = yaml.safe_load(f)
             self.param["L"] = (self.sim_config["target"]["size"][0])/2
             self.param["m"] = self.sim_config["mass"]["target"]
-            self.param["mu"] = math.sqrt(self.sim_config["friction"]["plane"] * 
-                                        self.sim_config["friction"]["target"])
+            # self.param["mu"] = math.sqrt(self.sim_config["friction"]["plane"] * 
+            #                             self.sim_config["friction"]["target"])
+            self.param["mu"] = min((self.sim_config["friction"]["plane"],
+                                        self.sim_config["friction"]["target"]))
             self.param["g"] = self.sim_config["gravity"]
 
             self.param["r"] = math.sqrt(5)*self.param["L"]

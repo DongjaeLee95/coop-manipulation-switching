@@ -25,6 +25,10 @@ class RobotCtrller:
             self.r = self.sim_config["robot"]["radius"]
             self.m = self.sim_config["mass"]["robot"]
 
+        with open("configs/obj_ctrl_config.yaml", "r") as f:
+            self.obj_ctrl_config = yaml.safe_load(f)
+            self.uM = self.obj_ctrl_config["uM"]
+            
         # Initialize robot parameters
         self.num_robots = self.sim_config["robot"]["num"]
         self.delta_indicator = np.arange(self.num_robots)
@@ -85,7 +89,7 @@ class RobotCtrller:
             torque = self.J*(self.kp_r*e_R[2] + self.kd_r*e_om[2])
 
             if self.mode == Mode.CON:
-                force[0] += robot_pushs[idx] # additional pushing force
+                force[0] += min((robot_pushs[idx],self.uM)) # additional pushing force
             
             forces_x.append(force[0])
             forces_y.append(force[1])
@@ -103,19 +107,23 @@ class RobotCtrller:
         if ext_trajs is not None:
             self.ext_trajs = ext_trajs
             self.ext_traj_idx = 0
-            self.robot_id = 0
+            self.delta_indicator = delta_indicator
 
         if self.ext_trajs is not None:
+            traj_lens = [len(traj) for traj in self.ext_trajs["positions"].values()]
+            traj_len = min(traj_lens)
+            self.ext_traj_idx = min(self.ext_traj_idx, traj_len - 1)
+
             # Use current external trajectory
             pos_ds = np.array([self.ext_trajs["positions"][i][self.ext_traj_idx] for i in range(self.num_robots)])
             ori_ds = np.array([self.ext_trajs["orientations"][i][self.ext_traj_idx] for i in range(self.num_robots)])
 
             self.ext_traj_idx += 1
-            if self.ext_traj_idx >= len(self.ext_trajs):
+            if self.ext_traj_idx >= (len(self.ext_trajs["positions"][0]) - 1):
                 # Reset trajectory once done
                 self.ext_trajs = None
                 self.ext_traj_idx = 0
-                self.delta_indicator = delta_indicator
+                # self.delta_indicator = delta_indicator
 
             return pos_ds, ori_ds
         else:

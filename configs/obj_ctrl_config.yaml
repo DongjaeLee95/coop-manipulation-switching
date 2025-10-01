@@ -10,9 +10,14 @@ Kq:  # 3x3 diagonal matrix
   - [0.0, 10.0, 0.0]
   - [0.0, 0.0, 10.0]
 
+Ki:  # 3x3 diagonal matrix
+  - [1.0, 0.0, 0.0]
+  - [0.0, 1.0, 0.0]
+  - [0.0, 0.0, 1.0]
+
 V_decay: 1 # 2
 
 c: 1
 
 # Switching law related
-uM: 10
+uM: 20

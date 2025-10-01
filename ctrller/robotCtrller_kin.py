@@ -115,7 +115,7 @@ class RobotCtrller:
         if ext_trajs is not None:
             self.ext_trajs = ext_trajs
             self.ext_traj_idx = 0
-            self.delta_indicator = delta_indicator ### TODO - 위치 바꿈
+            self.delta_indicator = delta_indicator
 
         if self.ext_trajs is not None:
             traj_lens = [len(traj) for traj in self.ext_trajs["positions"].values()]

@@ -28,6 +28,7 @@ class LogVisualizer:
 
         self.V_lyap = []
         self.delta = []
+        self.delta_indicator = []
         self.trigger = []
         self.MILP_compt_time = []
         self.MILP_rho = []
@@ -55,6 +56,7 @@ class LogVisualizer:
             action = step["actions"][0]
             target = step["target"]
             switching = step["switching"]
+            u = step["obj_actions"]
 
             # Robot 1 data
             self.pos_x.append(robot["position"][0])
@@ -78,19 +80,20 @@ class LogVisualizer:
             # switching law-related
             self.V_lyap.append(switching["V_lyap"])
             self.delta.append(switching["delta"])
+            self.delta_indicator.append(switching["delta_indicator"])
             self.trigger.append(switching["trigger"])
             self.MILP_compt_time.append(switching["MILP_compt_time"])
             self.MILP_rho.append(switching["MILP_rho"])
 
             # Extract u for all robots in this step
-            u_values = [a.get("u", 0.0) for a in step["actions"]]
-            self.u_matrix.append(u_values)
+            self.u_matrix.append(u)
 
             # Extract controller mode (default to 0 if not present)
             self.ctrl_modes.append(step.get("ctrl_mode", 0))
 
         self.u_matrix = np.array(self.u_matrix)
         self.ctrl_modes = np.array(self.ctrl_modes)
+        self.delta_indicator = np.array(self.delta_indicator)
 
     def plot_robot1(self):
         fig, axs = plt.subplots(3, 3, figsize=(15, 10))
@@ -135,12 +138,15 @@ class LogVisualizer:
         plt.tight_layout()        
 
     def plot_u_with_mode(self):
-        if "u" not in self.data["steps"][0]["actions"][0]:
-            print("No 'u' data found in the logs. Skipping u plot.")
-            return
 
         time = self.time
         u_matrix = self.u_matrix
+        delta_ind = self.delta_indicator    
+        
+        u_robot_mat = []
+        for j in range(len(time)):
+            u_robot_mat.append([u_matrix[j, delta_ind[j][i]] for i in range(self.num_robots)])
+        u_robot_mat = np.array(u_robot_mat)   # shape: (T, num_robots)  # shape: (T, num_robots)
         ctrl_modes = self.ctrl_modes
 
         num_cols = 2
@@ -148,9 +154,12 @@ class LogVisualizer:
 
         fig, axs = plt.subplots(num_rows, num_cols, figsize=(12, 3 * num_rows), sharex=True)
         axs = axs.flatten()  # Make indexing uniform
+        for ax in axs:
+            ax.grid(True)
+            ax.set_xlim(self.time[0], self.time[-1])
 
         for i in range(self.num_robots):
-            axs[i].plot(time, u_matrix[:, i], label=f"u_{i}")
+            axs[i].plot(time, u_robot_mat[:, i], label=f"u_{i}")
             axs[i].set_ylabel(f"u_{i}")
             axs[i].grid(True)
 

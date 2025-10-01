@@ -13,10 +13,17 @@ class Mode(IntEnum):
     NAV = 1
 
 def main():
+    
+    t = 0.0
+    dt = 1 / 240
+
     env = PushingEnv(gui=True, sim_config_path="configs/sim_config.yaml")
-    ctrl = RobotCtrller(ctrl_config_path="configs/ctrl_config.yaml", sim_config_path="configs/sim_config.yaml")
-    obj_ctrl = ObjCtrller(obj_ctrl_config_path="configs/obj_ctrl_config.yaml", sim_config_path="configs/sim_config.yaml")
-    switching_law = SwitingLaw(obj_ctrl_config_path="configs/obj_ctrl_config.yaml", sim_config_path="configs/sim_config.yaml")
+    ctrl = RobotCtrller(ctrl_config_path="configs/ctrl_config.yaml", 
+                        sim_config_path="configs/sim_config.yaml")
+    obj_ctrl = ObjCtrller(dt, True, obj_ctrl_config_path="configs/obj_ctrl_config.yaml", 
+                          sim_config_path="configs/sim_config.yaml")
+    switching_law = SwitingLaw(obj_ctrl_config_path="configs/obj_ctrl_config.yaml", 
+                               sim_config_path="configs/sim_config.yaml")
     slot_planner = RobotSlotPlanner(sim_config_path="configs/sim_config.yaml")
 
     logger = SimulationLogger()
@@ -26,9 +33,6 @@ def main():
         # print simulation setting
         # env.print_dynamics_info(env.target_box)
         # env.print_dynamics_info(env.robots[0])
-
-        t = 0.0
-        dt = 1 / 240
  
         # initialize delta's
         delta_indicator = np.array(env.robot_init_id)
@@ -37,7 +41,7 @@ def main():
             delta[i] = 1
 
         # set object desired pos, orientation
-        obj_d = np.array([0, 0, np.deg2rad(90), 0.0, 0.0, 0.0])
+        obj_d = np.array([1, 1, np.deg2rad(30), 0.0, 0.0, 0.0])
 
         while True:
             state = env.get_state()
@@ -51,18 +55,16 @@ def main():
 
             # multi-agent path finding (collision-free)
             if switch_trigger:
-                delta_indicator, ext_trajs = slot_planner.compute(state["robots"], state["target"], delta, delta_indicator)
-                # visualize ext_trajs based on current robot pose and target pose
+                delta_indicator, ext_trajs = slot_planner.compute(state["robots"], state["target"], 
+                                                                    delta, delta_indicator)
             else:
                 ext_trajs = None
 
             # robot motion generator & robot controller
             pos_ds, ori_ds = ctrl.motion_planner(state["target"], delta_indicator, ext_trajs)
-            if switch_trigger:
-                print("yes")
             forces_x, forces_y, torques = ctrl.compute_actions(state["robots"], u, pos_ds, ori_ds, switch_trigger)
             if ctrl.mode == Mode.NAV:
-                u = np.zeros(env.num_robots)
+                u = np.zeros(len(delta))
 
             env.apply_actions(forces_x, forces_y, torques)
             env.step()
@@ -71,11 +73,11 @@ def main():
                 "forces_x": forces_x,
                 "forces_y": forces_y,
                 "torques": torques,
-                "u": u,
                 "ctrl_mode": int(ctrl.mode)  # convert enum to int for logging
-            }, {
+            }, u, {
                 "V_lyap": V,
                 "delta": delta,
+                "delta_indicator": delta_indicator,
                 "trigger": switch_trigger,
                 "MILP_compt_time": compt_time,
                 "MILP_rho": rho

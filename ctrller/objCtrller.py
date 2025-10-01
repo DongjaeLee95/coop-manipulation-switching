@@ -4,7 +4,7 @@ import numpy as np
 import math
 
 class ObjCtrller:
-    def __init__(self, obj_ctrl_config_path="configs/obj_ctrl_config.yaml", sim_config_path="configs/sim_config.yaml"):
+    def __init__(self, integral_flag = False, dt = 1/240, obj_ctrl_config_path="configs/obj_ctrl_config.yaml", sim_config_path="configs/sim_config.yaml"):
         """
         Unified controller that combines high-level control and QP-based actuator allocation.
         Args:
@@ -16,6 +16,7 @@ class ObjCtrller:
             self.param["qdim"] = self.obj_ctrl_config["qdim"]
             self.param["udim"] = self.obj_ctrl_config["udim"]
             self.param["Kq"] = np.array(self.obj_ctrl_config["Kq"])
+            self.param["Ki"] = np.array(self.obj_ctrl_config["Ki"])
             self.param["V_decay"] = self.obj_ctrl_config["V_decay"]
             self.param["c"] = self.obj_ctrl_config["c"]
 
@@ -23,13 +24,20 @@ class ObjCtrller:
             self.sim_config = yaml.safe_load(f)
             self.param["L"] = (self.sim_config["target"]["size"][0])/2
             self.param["m"] = self.sim_config["mass"]["target"]
-            self.param["mu"] = math.sqrt(self.sim_config["friction"]["plane"] * 
-                                        self.sim_config["friction"]["target"])
+            # self.param["mu"] = math.sqrt(self.sim_config["friction"]["plane"] * 
+            #                             self.sim_config["friction"]["target"])
+            self.param["mu"] = min((self.sim_config["friction"]["plane"],
+                                        self.sim_config["friction"]["target"]))
             self.param["g"] = self.sim_config["gravity"]
 
             self.param["r"] = math.sqrt(5)*self.param["L"]
             self.param["c_f"] = self.param["mu"]*self.param["m"]*self.param["g"]
             self.param["c_tau"] = self.param["c"]*self.param["r"]*self.param["c_f"]
+        
+        # TODO - integral term should be reinitialized whenever goes to NAV mode
+        self.dt = dt
+        self.integral_error = np.zeros((self.param["qdim"],1))
+        self.integral_flag = integral_flag
 
     def compute(self, obj_state, x_d, delta):
         """
@@ -69,7 +77,11 @@ class ObjCtrller:
         G = F @ np.linalg.inv(M)
 
         eq = q_d - q.reshape(-1, 1)
-        tau = M @ (F.T @ (qdot_d + self.param["Kq"] @ eq))
+        if self.integral_flag:
+            tau = M @ (F.T @ (qdot_d + self.param["Kq"] @ eq + self.param["Ki"] @ self.integral_error))
+            self.integral_error += eq*self.dt
+        else:
+            tau = M @ (F.T @ (qdot_d + self.param["Kq"] @ eq))
         tau = tau.flatten()
 
         # --- QP controller (analytic solution) ---
