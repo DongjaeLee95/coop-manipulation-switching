@@ -26,7 +26,7 @@ class RobotCtrller:
 
         # Initialize robot parameters
         self.num_robots = self.sim_config["robot"]["num"]
-        self.delta_indicator = np.arange(self.num_robots)
+        self.delta_indicator = np.array(self.sim_config["robot"]["init_id"])
         # [a,b,...]: 1st robot → slot a, 2nd robot → slot b, etc.
 
         # Initialize external trajectories

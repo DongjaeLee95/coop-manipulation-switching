@@ -19,7 +19,8 @@ def main():
     # -------------------------------
     # Environment & Controller Setup
     # -------------------------------
-    dt = 1 / 240
+    # dt = 1 / 240
+    dt = 1 / 200
     env = PushingEnvODE(sim_config_path="configs/sim_config.yaml", dt=dt)
     ctrl = RobotCtrller(
         ctrl_config_path="configs/ctrl_config.yaml",
@@ -52,7 +53,7 @@ def main():
 
     # desired target pose
     # obj_d = np.array([0, 0, np.deg2rad(90), 0.0, 0.0, 0.0])
-    obj_d = np.array([1, 1, np.deg2rad(30), 0.0, 0.0, 0.0])
+    obj_d = np.array([1, 1, 1, 0.0, 0.0, 0.0])
     switch_trigger = False
 
     while True:
@@ -121,7 +122,8 @@ def main():
     # offline visualization (optional)
     visualizer = LogVisualizer(log_path=logger.log_path, sim_config="configs/sim_config.yaml")
     
-    visualizer.plot_animation(dt=dt, save_path="results/simulation.mp4")
+    # visualizer.plot_animation(dt=dt, save_path="results/simulation.mp4")
+    visualizer.plot_animation(dt=dt, save_path=None)
     
     visualizer.plot_target_box()
     visualizer.plot_u_with_mode()

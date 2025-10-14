@@ -20,4 +20,4 @@ V_decay: 1 # 2
 c: 1
 
 # Switching law related
-uM: 20
+uM: 10
